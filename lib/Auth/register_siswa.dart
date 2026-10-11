@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:ruang_aman/Auth/verifikasi.dart';
+import 'package:ruang_aman/ipconfig.dart';
 
 class RegisterSiswa extends StatefulWidget {
   const RegisterSiswa({super.key});
@@ -9,130 +13,294 @@ class RegisterSiswa extends StatefulWidget {
 }
 
 class _RegisterSiswaState extends State<RegisterSiswa> {
-  // ============================================================
   // CONTROLLER
-  // ============================================================
+  final namaController = TextEditingController();
+  final nisController = TextEditingController();
+  final kelasController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final schoolIdController = TextEditingController();
 
-  final TextEditingController namaController = TextEditingController();
-  final TextEditingController nisController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
-  // ============================================================
   // STATE
-  // ============================================================
-
   String? guruDipilih;
   bool obscurePassword = true;
+  bool isLoading = false;
 
-  // ============================================================
-  // DATA GURU BK
-  // ============================================================
-
+  // DATA GURU BK SEMENTARA
   final List<Map<String, String>> guruBK = [
     {"nama": "Siti Rahma, S.Psi", "sekolah": "SMA Negeri 1 Bandung"},
     {"nama": "Budi Santoso, S.Pd", "sekolah": "SMK Informatika"},
     {"nama": "Ahmad Fauzi, M.Psi", "sekolah": "SMA Harapan Bangsa"},
   ];
 
-  // ============================================================
-  // DISPOSE
-  // ============================================================
-
   @override
   void dispose() {
     namaController.dispose();
     nisController.dispose();
+    kelasController.dispose();
     emailController.dispose();
     passwordController.dispose();
-
+    schoolIdController.dispose();
     super.dispose();
   }
 
-  // ============================================================
-  // PROSES REGISTER
-  // ============================================================
+  // MESSAGE
+  void showMessage(String message, {bool success = false}) {
+    if (!mounted) return;
 
-  void register() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? const Color(0xff087F72) : Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // REGISTER KE API
+  Future<void> register() async {
+    if (isLoading) return;
+
     final nama = namaController.text.trim();
     final nis = nisController.text.trim();
+    final kelas = kelasController.text.trim();
     final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-
-    // ==========================================================
-    // VALIDASI GURU BK
-    // ==========================================================
+    final password = passwordController.text;
+    final schoolId = int.tryParse(schoolIdController.text.trim());
 
     if (guruDipilih == null) {
       showMessage("Silakan pilih Guru BK terlebih dahulu");
       return;
     }
 
-    // ==========================================================
-    // VALIDASI FIELD KOSONG
-    // ==========================================================
-
-    if (nama.isEmpty || nis.isEmpty || email.isEmpty || password.isEmpty) {
+    if (nama.isEmpty ||
+        nis.isEmpty ||
+        kelas.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        schoolIdController.text.trim().isEmpty) {
       showMessage("Semua data harus diisi");
       return;
     }
 
-    // ==========================================================
-    // VALIDASI EMAIL SEDERHANA
-    // ==========================================================
-
-    if (!email.contains("@") || !email.contains(".")) {
-      showMessage("Format email tidak valid");
+    if (schoolId == null || schoolId <= 0) {
+      showMessage("ID sekolah tidak valid");
       return;
     }
 
-    // ==========================================================
-    // VALIDASI PASSWORD
-    // ==========================================================
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+    if (!emailRegex.hasMatch(email)) {
+      showMessage("Format email tidak valid");
+      return;
+    }
 
     if (password.length < 6) {
       showMessage("Password minimal 6 karakter");
       return;
     }
 
-    // ==========================================================
-    // REGISTER BERHASIL → VERIFIKASI
-    // ==========================================================
+    setState(() => isLoading = true);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => VerifikasiScreen(email: email)),
-    );
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/register'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'nama': nama,
+              'email': email,
+              'password': password,
+              'role': 'siswa',
+              'school_id': schoolId,
+              'nis': nis,
+              'kelas': kelas,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      Map<String, dynamic> data = {};
+
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          data = decoded;
+        }
+      } catch (_) {
+        // Respons server tidak berupa JSON.
+      }
+
+      if (!mounted) return;
+
+      final berhasil =
+          response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] != false;
+
+      if (berhasil) {
+        showMessage(
+          data['message']?.toString() ?? 'Registrasi siswa berhasil',
+          success: true,
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => VerifikasiScreen(email: email)),
+        );
+      } else {
+        showMessage(
+          data['message']?.toString() ??
+              'Registrasi gagal (${response.statusCode})',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      showMessage('Gagal menghubungi server: $e');
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
   }
 
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
+  // INPUT DECORATION
+  InputDecoration inputDecoration(String hint, IconData icon) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      prefixIcon: Icon(icon, color: const Color(0xff087F72)),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(vertical: 17, horizontal: 15),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
       ),
     );
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
+  // INPUT
+  Widget input({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: inputDecoration(hint, icon),
+      ),
+    );
+  }
+
+  // PASSWORD INPUT
+  Widget passwordInput() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: passwordController,
+        obscureText: obscurePassword,
+        decoration: inputDecoration("Password", Icons.lock_outline).copyWith(
+          suffixIcon: IconButton(
+            onPressed: () {
+              setState(() {
+                obscurePassword = !obscurePassword;
+              });
+            },
+            icon: Icon(
+              obscurePassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // REGISTER BUTTON
+  Widget registerButton() {
+    return Container(
+      width: double.infinity,
+      height: 55,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff62C9A9), Color(0xff087F72)],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff087F72).withOpacity(.20),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: isLoading ? null : register,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Daftar Sekarang",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final guruTerpilih = guruDipilih == null
+        ? null
+        : guruBK.firstWhere((guru) => guru['nama'] == guruDipilih);
+
     return Scaffold(
       backgroundColor: const Color(0xffF8FCFA),
-
       body: Stack(
         children: [
-          // ====================================================
-          // DEKORASI BACKGROUND ATAS
-          // ====================================================
+          // BACKGROUND ATAS
           Positioned(
             top: -70,
             right: -50,
@@ -146,9 +314,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
             ),
           ),
 
-          // ====================================================
-          // DEKORASI BACKGROUND BAWAH
-          // ====================================================
+          // BACKGROUND BAWAH
           Positioned(
             bottom: -50,
             left: -40,
@@ -162,27 +328,18 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
             ),
           ),
 
-          // ====================================================
-          // CONTENT
-          // ====================================================
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-
               padding: const EdgeInsets.fromLTRB(25, 15, 25, 60),
-
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
-                  // ============================================
                   // BACK BUTTON
-                  // ============================================
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(.08),
@@ -190,12 +347,8 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                         ),
                       ],
                     ),
-
                     child: IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
@@ -206,17 +359,13 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
                   const SizedBox(height: 30),
 
-                  // ============================================
                   // LOGO
-                  // ============================================
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(15),
-
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(.08),
@@ -224,19 +373,15 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                           ),
                         ],
                       ),
-
                       child: Image.asset("assets/logo_ruang.jpeg", height: 70),
                     ),
                   ),
 
                   const SizedBox(height: 25),
 
-                  // ============================================
                   // TITLE
-                  // ============================================
                   const Text(
                     "Daftar Sebagai\nSiswa",
-
                     style: TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.bold,
@@ -249,7 +394,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
                   const Text(
                     "Buat akun dan pilih Guru BK yang akan mendampingimu",
-
                     style: TextStyle(
                       color: Colors.grey,
                       fontSize: 14,
@@ -259,12 +403,9 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
                   const SizedBox(height: 35),
 
-                  // ============================================
                   // PILIH GURU BK
-                  // ============================================
                   const Text(
                     "Pilih Guru BK",
-
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -277,22 +418,17 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                   DropdownButtonFormField<String>(
                     value: guruDipilih,
                     isExpanded: true,
-
                     decoration: inputDecoration(
                       "Pilih Guru BK",
                       Icons.person_search_outlined,
                     ),
-
                     items: guruBK.map((guru) {
                       return DropdownMenuItem<String>(
                         value: guru["nama"],
-
                         child: Text(
                           guru["nama"] ?? "",
-
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-
                           style: const TextStyle(
                             fontSize: 14,
                             color: Color(0xff124F4A),
@@ -300,7 +436,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                         ),
                       );
                     }).toList(),
-
                     onChanged: (value) {
                       setState(() {
                         guruDipilih = value;
@@ -308,34 +443,25 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                     },
                   ),
 
-                  // ============================================
                   // DETAIL GURU BK
-                  // ============================================
-                  if (guruDipilih != null)
+                  if (guruTerpilih != null)
                     Container(
                       width: double.infinity,
-
                       margin: const EdgeInsets.only(top: 15),
-
                       padding: const EdgeInsets.all(15),
-
                       decoration: BoxDecoration(
                         color: const Color(0xffE7F7F2),
-
                         borderRadius: BorderRadius.circular(18),
                       ),
-
                       child: Row(
                         children: [
                           Container(
                             width: 42,
                             height: 42,
-
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
                             ),
-
                             child: const Icon(
                               Icons.verified_user_outlined,
                               color: Color(0xff087F72),
@@ -347,26 +473,18 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-
                               children: [
                                 Text(
-                                  guruDipilih!,
-
+                                  guruTerpilih["nama"] ?? "",
                                   style: const TextStyle(
                                     fontSize: 13,
                                     color: Color(0xff124F4A),
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-
                                 const SizedBox(height: 3),
-
                                 Text(
-                                  guruBK.firstWhere(
-                                        (guru) => guru["nama"] == guruDipilih,
-                                      )["sekolah"] ??
-                                      "",
-
+                                  guruTerpilih["sekolah"] ?? "",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey.shade600,
@@ -381,12 +499,9 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
                   const SizedBox(height: 25),
 
-                  // ============================================
-                  // FORM TITLE
-                  // ============================================
+                  // DATA DIRI
                   const Text(
                     "Data Diri",
-
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -396,18 +511,12 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
                   const SizedBox(height: 15),
 
-                  // ============================================
-                  // NAMA
-                  // ============================================
                   input(
                     controller: namaController,
                     hint: "Nama Lengkap",
                     icon: Icons.person_outline,
                   ),
 
-                  // ============================================
-                  // NIS
-                  // ============================================
                   input(
                     controller: nisController,
                     hint: "NIS",
@@ -415,9 +524,19 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                     keyboardType: TextInputType.number,
                   ),
 
-                  // ============================================
-                  // EMAIL
-                  // ============================================
+                  input(
+                    controller: kelasController,
+                    hint: "Kelas (contoh: XII IPA 1)",
+                    icon: Icons.class_outlined,
+                  ),
+
+                  input(
+                    controller: schoolIdController,
+                    hint: "ID Sekolah",
+                    icon: Icons.school_outlined,
+                    keyboardType: TextInputType.number,
+                  ),
+
                   input(
                     controller: emailController,
                     hint: "Email",
@@ -425,27 +544,17 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                     keyboardType: TextInputType.emailAddress,
                   ),
 
-                  // ============================================
-                  // PASSWORD
-                  // ============================================
                   passwordInput(),
 
                   const SizedBox(height: 10),
 
-                  // ============================================
-                  // BUTTON REGISTER
-                  // ============================================
                   registerButton(),
 
                   const SizedBox(height: 20),
 
-                  // ============================================
-                  // FOOTER
-                  // ============================================
                   Center(
                     child: Text(
                       "Aman bercerita • Nyaman berkembang",
-
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 12,
@@ -457,172 +566,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // INPUT
-  // ============================================================
-
-  Widget input({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-
-        decoration: inputDecoration(hint, icon),
-      ),
-    );
-  }
-
-  // ============================================================
-  // PASSWORD INPUT
-  // ============================================================
-
-  Widget passwordInput() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-
-      child: TextField(
-        controller: passwordController,
-        obscureText: obscurePassword,
-
-        decoration: InputDecoration(
-          hintText: "Password",
-
-          prefixIcon: const Icon(Icons.lock_outline, color: Color(0xff087F72)),
-
-          suffixIcon: IconButton(
-            onPressed: () {
-              setState(() {
-                obscurePassword = !obscurePassword;
-              });
-            },
-
-            icon: Icon(
-              obscurePassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-
-              color: Colors.grey,
-            ),
-          ),
-
-          filled: true,
-          fillColor: Colors.white,
-
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-
-            borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // INPUT DECORATION
-  // ============================================================
-
-  InputDecoration inputDecoration(String hint, IconData icon) {
-    return InputDecoration(
-      hintText: hint,
-
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-
-      prefixIcon: Icon(icon, color: const Color(0xff087F72)),
-
-      filled: true,
-      fillColor: Colors.white,
-
-      contentPadding: const EdgeInsets.symmetric(vertical: 17, horizontal: 15),
-
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-
-        borderSide: BorderSide(color: Colors.grey.shade200),
-      ),
-
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-
-        borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
-      ),
-    );
-  }
-
-  // ============================================================
-  // REGISTER BUTTON
-  // ============================================================
-
-  Widget registerButton() {
-    return Container(
-      width: double.infinity,
-      height: 55,
-
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xff62C9A9), Color(0xff087F72)],
-        ),
-
-        borderRadius: BorderRadius.circular(30),
-
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff087F72).withOpacity(.20),
-
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-
-      child: ElevatedButton(
-        onPressed: register,
-
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-
-          children: [
-            Text(
-              "Daftar Sekarang",
-
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            SizedBox(width: 8),
-
-            Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-          ],
-        ),
       ),
     );
   }

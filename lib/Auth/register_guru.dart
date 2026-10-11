@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:ruang_aman/Auth/verifikasi.dart';
+import 'package:ruang_aman/ipconfig.dart';
 
 class RegisterGuru extends StatefulWidget {
   const RegisterGuru({super.key});
@@ -9,30 +13,16 @@ class RegisterGuru extends StatefulWidget {
 }
 
 class _RegisterGuruState extends State<RegisterGuru> {
-  // ============================================================
-  // CONTROLLER
-  // ============================================================
+  final namaController = TextEditingController();
+  final nipController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
-  final TextEditingController namaController = TextEditingController();
-  final TextEditingController nipController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
-  final TextEditingController sekolahController = TextEditingController();
-  final TextEditingController alamatSekolahController =
-      TextEditingController();
-  final TextEditingController kodeSekolahController =
-      TextEditingController();
-
-  // ============================================================
-  // STATE
-  // ============================================================
+  // Endpoint register meminta school_id, bukan nama sekolah.
+  final schoolIdController = TextEditingController();
 
   bool obscurePassword = true;
-
-  // ============================================================
-  // DISPOSE
-  // ============================================================
+  bool isLoading = false;
 
   @override
   void dispose() {
@@ -40,103 +30,256 @@ class _RegisterGuruState extends State<RegisterGuru> {
     nipController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    sekolahController.dispose();
-    alamatSekolahController.dispose();
-    kodeSekolahController.dispose();
-
+    schoolIdController.dispose();
     super.dispose();
   }
 
-  // ============================================================
-  // REGISTER
-  // ============================================================
+  void showMessage(String message, {bool success = false}) {
+    if (!mounted) return;
 
-  void register() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? const Color(0xff087F72) : Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> register() async {
+    if (isLoading) return;
+
     final nama = namaController.text.trim();
     final nip = nipController.text.trim();
     final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-
-    final sekolah = sekolahController.text.trim();
-    final alamatSekolah = alamatSekolahController.text.trim();
-    final kodeSekolah = kodeSekolahController.text.trim();
-
-    // ==========================================================
-    // VALIDASI DATA KOSONG
-    // ==========================================================
+    final password = passwordController.text;
+    final schoolId = int.tryParse(schoolIdController.text.trim());
 
     if (nama.isEmpty ||
         nip.isEmpty ||
         email.isEmpty ||
         password.isEmpty ||
-        sekolah.isEmpty ||
-        alamatSekolah.isEmpty ||
-        kodeSekolah.isEmpty) {
+        schoolIdController.text.trim().isEmpty) {
       showMessage("Semua data harus diisi");
       return;
     }
 
-    // ==========================================================
-    // VALIDASI EMAIL
-    // ==========================================================
-
-    if (!email.contains("@") || !email.contains(".")) {
-      showMessage("Format email tidak valid");
+    if (schoolId == null || schoolId <= 0) {
+      showMessage("ID sekolah harus berupa angka yang valid");
       return;
     }
 
-    // ==========================================================
-    // VALIDASI PASSWORD
-    // ==========================================================
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+    if (!emailRegex.hasMatch(email)) {
+      showMessage("Format email tidak valid");
+      return;
+    }
 
     if (password.length < 6) {
       showMessage("Password minimal 6 karakter");
       return;
     }
 
-    // ==========================================================
-    // REGISTER BERHASIL → VERIFIKASI
-    // ==========================================================
+    setState(() => isLoading = true);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VerifikasiScreen(
-          email: email,
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/auth/register');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'nama': nama,
+              'email': email,
+              'password': password,
+              'role': 'guru',
+              'school_id': schoolId,
+              'nip': nip,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      Map<String, dynamic> data = {};
+
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          data = decoded;
+        }
+      } catch (_) {
+        // Respons kosong atau bukan JSON.
+      }
+
+      if (!mounted) return;
+
+      final berhasil =
+          response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] != false;
+
+      if (berhasil) {
+        showMessage(
+          data['message']?.toString() ?? 'Registrasi berhasil',
+          success: true,
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => VerifikasiScreen(email: email)),
+        );
+      } else {
+        showMessage(
+          data['message']?.toString() ??
+              'Registrasi gagal (${response.statusCode})',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      if (e is http.ClientException) {
+        showMessage(
+          'Tidak dapat terhubung ke server. Periksa backend dan URL API.',
+        );
+      } else {
+        showMessage('Terjadi kesalahan: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  InputDecoration inputDecoration(String hint, IconData icon) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      prefixIcon: Icon(icon, color: const Color(0xff087F72)),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(vertical: 17, horizontal: 15),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
+      ),
+    );
+  }
+
+  Widget input({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: inputDecoration(hint, icon),
+      ),
+    );
+  }
+
+  Widget passwordInput() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: passwordController,
+        obscureText: obscurePassword,
+        decoration: inputDecoration('Password', Icons.lock_outline).copyWith(
+          suffixIcon: IconButton(
+            onPressed: () {
+              setState(() {
+                obscurePassword = !obscurePassword;
+              });
+            },
+            icon: Icon(
+              obscurePassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: Colors.grey,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
+  Widget registerButton() {
+    return Container(
+      width: double.infinity,
+      height: 55,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff62C9A9), Color(0xff087F72)],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff087F72).withOpacity(.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: isLoading ? null : register,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Daftar Sekarang',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ],
+              ),
       ),
     );
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF8FCFA),
-
       body: Stack(
         children: [
-          // ====================================================
-          // DECORATION ATAS
-          // ====================================================
-
           Positioned(
             top: -60,
             right: -50,
@@ -149,10 +292,6 @@ class _RegisterGuruState extends State<RegisterGuru> {
               ),
             ),
           ),
-
-          // ====================================================
-          // DECORATION BAWAH
-          // ====================================================
 
           Positioned(
             bottom: -40,
@@ -170,27 +309,15 @@ class _RegisterGuruState extends State<RegisterGuru> {
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-
-              padding: const EdgeInsets.fromLTRB(
-                25,
-                15,
-                25,
-                60,
-              ),
-
+              padding: const EdgeInsets.fromLTRB(25, 15, 25, 60),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
-                  // ============================================
                   // BACK BUTTON
-                  // ============================================
-
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(.08),
@@ -198,12 +325,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
                         ),
                       ],
                     ),
-
                     child: IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
@@ -214,18 +337,13 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
                   const SizedBox(height: 30),
 
-                  // ============================================
                   // LOGO
-                  // ============================================
-
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(15),
-
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(.08),
@@ -233,23 +351,14 @@ class _RegisterGuruState extends State<RegisterGuru> {
                           ),
                         ],
                       ),
-
-                      child: Image.asset(
-                        "assets/logo_ruang.jpeg",
-                        height: 70,
-                      ),
+                      child: Image.asset('assets/logo_ruang.jpeg', height: 70),
                     ),
                   ),
 
                   const SizedBox(height: 25),
 
-                  // ============================================
-                  // TITLE
-                  // ============================================
-
                   const Text(
-                    "Daftar Sebagai\nGuru BK",
-
+                    'Daftar Sebagai\nGuru BK',
                     style: TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.bold,
@@ -261,9 +370,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
                   const SizedBox(height: 10),
 
                   const Text(
-                    "Lengkapi data untuk mendampingi siswa "
-                    "dengan layanan konseling terbaik",
-
+                    'Lengkapi data untuk mendampingi siswa '
+                    'dengan layanan konseling terbaik',
                     style: TextStyle(
                       color: Colors.grey,
                       fontSize: 14,
@@ -273,13 +381,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
                   const SizedBox(height: 35),
 
-                  // ============================================
-                  // DATA PRIBADI
-                  // ============================================
-
                   const Text(
-                    "Data Pribadi",
-
+                    'Data Pribadi',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -289,45 +392,35 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
                   const SizedBox(height: 15),
 
-                  // NAMA
                   input(
                     controller: namaController,
-                    hint: "Nama Lengkap",
+                    hint: 'Nama Lengkap',
                     icon: Icons.person_outline,
                   ),
 
-                  // NIP
                   input(
                     controller: nipController,
-                    hint: "NIP / ID Guru",
+                    hint: 'NIP / ID Guru',
                     icon: Icons.badge_outlined,
                   ),
 
-                  // EMAIL
                   input(
                     controller: emailController,
-                    hint: "Email",
+                    hint: 'Email',
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                   ),
 
-                  // PASSWORD
                   passwordInput(),
 
                   const SizedBox(height: 10),
 
-                  // ============================================
                   // DATA SEKOLAH
-                  // ============================================
-
                   Container(
                     padding: const EdgeInsets.all(18),
-
                     decoration: BoxDecoration(
                       color: Colors.white,
-
                       borderRadius: BorderRadius.circular(20),
-
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(.05),
@@ -336,10 +429,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
                         ),
                       ],
                     ),
-
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-
                       children: [
                         const Row(
                           children: [
@@ -348,12 +439,9 @@ class _RegisterGuruState extends State<RegisterGuru> {
                               color: Color(0xff087F72),
                               size: 22,
                             ),
-
                             SizedBox(width: 8),
-
                             Text(
-                              "Data Sekolah",
-
+                              'Data Sekolah',
                               style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
@@ -365,25 +453,17 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
                         const SizedBox(height: 18),
 
-                        // NAMA SEKOLAH
                         input(
-                          controller: sekolahController,
-                          hint: "Nama Sekolah",
+                          controller: schoolIdController,
+                          hint: 'ID Sekolah',
                           icon: Icons.school_outlined,
+                          keyboardType: TextInputType.number,
                         ),
 
-                        // ALAMAT SEKOLAH
-                        input(
-                          controller: alamatSekolahController,
-                          hint: "Alamat Sekolah",
-                          icon: Icons.location_on_outlined,
-                        ),
-
-                        // KODE SEKOLAH
-                        input(
-                          controller: kodeSekolahController,
-                          hint: "Kode Sekolah",
-                          icon: Icons.qr_code_2,
+                        const Text(
+                          'Masukkan ID sekolah yang sudah '
+                          'terdaftar pada sistem.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -391,22 +471,13 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
                   const SizedBox(height: 25),
 
-                  // ============================================
-                  // BUTTON REGISTER
-                  // ============================================
-
                   registerButton(),
 
                   const SizedBox(height: 25),
 
-                  // ============================================
-                  // FOOTER
-                  // ============================================
-
                   Center(
                     child: Text(
-                      "Aman bercerita • Nyaman berkembang",
-
+                      'Aman bercerita • Nyaman berkembang',
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 12,
@@ -418,211 +489,6 @@ class _RegisterGuruState extends State<RegisterGuru> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // INPUT
-  // ============================================================
-
-  Widget input({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-
-        decoration: inputDecoration(
-          hint,
-          icon,
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // PASSWORD
-  // ============================================================
-
-  Widget passwordInput() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-
-      child: TextField(
-        controller: passwordController,
-        obscureText: obscurePassword,
-
-        decoration: InputDecoration(
-          hintText: "Password",
-
-          hintStyle: TextStyle(
-            color: Colors.grey.shade400,
-            fontSize: 14,
-          ),
-
-          prefixIcon: const Icon(
-            Icons.lock_outline,
-            color: Color(0xff087F72),
-          ),
-
-          // SHOW / HIDE PASSWORD
-          suffixIcon: IconButton(
-            onPressed: () {
-              setState(() {
-                obscurePassword = !obscurePassword;
-              });
-            },
-
-            icon: Icon(
-              obscurePassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-
-              color: Colors.grey,
-            ),
-          ),
-
-          filled: true,
-          fillColor: const Color(0xffFAFAFA),
-
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-
-            borderSide: BorderSide(
-              color: Colors.grey.shade200,
-            ),
-          ),
-
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-
-            borderSide: const BorderSide(
-              color: Color(0xff087F72),
-              width: 2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // INPUT DECORATION
-  // ============================================================
-
-  InputDecoration inputDecoration(
-    String hint,
-    IconData icon,
-  ) {
-    return InputDecoration(
-      hintText: hint,
-
-      hintStyle: TextStyle(
-        color: Colors.grey.shade400,
-        fontSize: 14,
-      ),
-
-      prefixIcon: Icon(
-        icon,
-        color: const Color(0xff087F72),
-      ),
-
-      filled: true,
-      fillColor: const Color(0xffFAFAFA),
-
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-
-        borderSide: BorderSide(
-          color: Colors.grey.shade200,
-        ),
-      ),
-
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-
-        borderSide: const BorderSide(
-          color: Color(0xff087F72),
-          width: 2,
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // BUTTON REGISTER
-  // ============================================================
-
-  Widget registerButton() {
-    return Container(
-      width: double.infinity,
-      height: 55,
-
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xff62C9A9),
-            Color(0xff087F72),
-          ],
-        ),
-
-        borderRadius: BorderRadius.circular(30),
-
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff087F72).withOpacity(.25),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-
-      child: ElevatedButton(
-        // ======================================================
-        // REGISTER → VERIFIKASI
-        // ======================================================
-
-        onPressed: register,
-
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-
-          children: [
-            Text(
-              "Daftar Sekarang",
-
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            SizedBox(width: 8),
-
-            Icon(
-              Icons.arrow_forward_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ],
-        ),
       ),
     );
   }

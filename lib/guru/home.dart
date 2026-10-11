@@ -1,5 +1,12 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'package:ruang_aman/ipconfig.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -9,160 +16,262 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  String selectedRange = "7 Hari Terakhir";
-
   // ============================================================
   // WARNA RUANGAMAN
   // ============================================================
+
   static const Color primaryColor = Color(0xff009B88);
   static const Color darkPrimary = Color(0xff124F4A);
   static const Color backgroundColor = Color(0xffF7FCFA);
   static const Color lightGreen = Color(0xffE9F7F1);
 
+  static const Color highColor = Color(0xffEF5350);
+  static const Color mediumColor = Color(0xffF4A340);
+  static const Color lowColor = Color(0xff35B99A);
+
+  static const FlutterSecureStorage storage = FlutterSecureStorage();
+
+  bool isLoading = true;
+  String? error;
+
+  Map<String, dynamic> stats = {};
+  Map<String, dynamic> riskData = {};
+  List<Map<String, dynamic>> activities = [];
+
+  // ============================================================
+  // INIT
+  // ============================================================
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: backgroundColor,
-      width: double.infinity,
-      height: double.infinity,
+  void initState() {
+    super.initState();
+    loadDashboard();
+  }
 
-      child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 25,
-                bottom: 110,
-              ),
+  // ============================================================
+  // PEMBACA DATA JSON
+  // ============================================================
 
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
+  dynamic firstValue(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      if (source[key] != null) {
+        return source[key];
+      }
+    }
+    return null;
+  }
 
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ==================================================
-                      // HEADER
-                      // ==================================================
-                      _buildHeader(),
+  Map<String, dynamic>? asMap(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return null;
+  }
 
-                      const SizedBox(height: 25),
+  String statValue(List<String> keys) {
+    final value = firstValue(stats, keys);
+    return value?.toString() ?? '—';
+  }
 
-                      // ==================================================
-                      // WELCOME
-                      // ==================================================
-                      _buildWelcomeCard(),
+  double? asNumber(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
 
-                      const SizedBox(height: 25),
+  double? riskValue(List<String> keys) {
+    return asNumber(firstValue(riskData, keys));
+  }
 
-                      // ==================================================
-                      // FILTER
-                      // ==================================================
-                      _buildFilter(),
+  // ============================================================
+  // GET /api/bk/dashboard/stats
+  // ============================================================
 
-                      const SizedBox(height: 25),
+  Future<void> loadDashboard() async {
+    if (!mounted) return;
 
-                      // ==================================================
-                      // RINGKASAN
-                      // ==================================================
-                      const Text(
-                        "Ringkasan Laporan",
-                        style: TextStyle(
-                          decoration: TextDecoration.none,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xff1F2937),
-                        ),
-                      ),
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
 
-                      const SizedBox(height: 15),
+    try {
+      // TOKEN JWT DARI LOGIN
+      final token = await storage.read(key: 'auth_token');
 
-                      _buildStatisticGrid(),
+      if (token == null || token.isEmpty) {
+        throw Exception('Token tidak ditemukan. Silakan login kembali.');
+      }
 
-                      const SizedBox(height: 28),
+      // API DASHBOARD GURU BK
+      final response = await http
+          .get(
+            Uri.parse(ApiConfig.bkDashboardStats),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
 
-                      // ==================================================
-                      // PRIORITAS
-                      // ==================================================
-                      _buildRiskHeader(),
+      dynamic result;
 
-                      const SizedBox(height: 15),
+      try {
+        result = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Respons backend bukan JSON yang valid.');
+      }
 
-                      _buildRiskCard(),
+      // CEK STATUS API
+      if (response.statusCode == 401) {
+        throw Exception('Sesi login sudah kedaluwarsa. Silakan login kembali.');
+      }
 
-                      const SizedBox(height: 28),
+      if (response.statusCode == 403) {
+        throw Exception('Akses ditolak. Endpoint hanya untuk Guru BK.');
+      }
 
-                      // ==================================================
-                      // AKTIVITAS
-                      // ==================================================
-                      const Text(
-                        "Aktivitas Terbaru",
-                        style: TextStyle(
-                          decoration: TextDecoration.none,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xff1F2937),
-                        ),
-                      ),
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          (result is Map && result['success'] == false)) {
+        final message = result is Map ? result['message']?.toString() : null;
 
-                      const SizedBox(height: 15),
+        throw Exception(
+          message ?? 'Gagal mengambil dashboard (${response.statusCode})',
+        );
+      }
 
-                      _buildActivityCard(),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
+      // AMBIL DATA UTAMA
+      final root = asMap(result);
+
+      if (root == null) {
+        throw Exception('Format data dashboard tidak valid.');
+      }
+
+      final data = asMap(root['data']) ?? root;
+
+      // STATISTIK:
+      // Mendukung data langsung atau nested.
+      final nestedStats = asMap(
+        firstValue(data, [
+          'stats',
+          'statistics',
+          'statistik',
+          'summary',
+          'ringkasan',
+        ]),
+      );
+
+      final parsedStats = {...data, if (nestedStats != null) ...nestedStats};
+
+      // RISIKO:
+      // Hanya digunakan jika backend menyediakan angka.
+      final parsedRisk =
+          asMap(
+            firstValue(data, [
+              'risk',
+              'risks',
+              'riskDistribution',
+              'risk_distribution',
+              'prioritas_risiko',
+              'prioritasRisiko',
+            ]),
+          ) ??
+          asMap(
+            firstValue(parsedStats, [
+              'risk',
+              'riskDistribution',
+              'risk_distribution',
+            ]),
+          ) ??
+          <String, dynamic>{};
+
+      // AKTIVITAS:
+      // Hanya digunakan jika backend mengirim list.
+      dynamic rawActivities = firstValue(data, [
+        'activities',
+        'activity',
+        'recentActivities',
+        'recent_activities',
+        'aktivitas_terbaru',
+        'aktivitas',
+      ]);
+
+      if (rawActivities == null && nestedStats != null) {
+        rawActivities = firstValue(nestedStats, [
+          'activities',
+          'recentActivities',
+          'aktivitas_terbaru',
+        ]);
+      }
+
+      final parsedActivities = rawActivities is List
+          ? rawActivities
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+
+      setState(() {
+        stats = parsedStats;
+        riskData = parsedRisk;
+        activities = parsedActivities;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+
+      setState(() {
+        error = 'Koneksi timeout. Periksa server backend.';
+      });
+    } on http.ClientException {
+      if (!mounted) return;
+
+      setState(() {
+        error = 'Tidak dapat terhubung ke server API.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   // ============================================================
   // HEADER
   // ============================================================
-  Widget _buildHeader() {
+
+  Widget buildHeader() {
     return Row(
       children: [
-        Expanded(
+        const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                "Dashboard",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                'Dashboard',
                 style: TextStyle(
-                  decoration: TextDecoration.none,
                   fontSize: 25,
                   fontWeight: FontWeight.bold,
                   color: darkPrimary,
                 ),
               ),
-
               SizedBox(height: 5),
-
               Text(
-                "Pantau laporan siswa hari ini",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 13,
-                  color: Colors.grey,
-                ),
+                'Pantau laporan siswa',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
             ],
           ),
         ),
-
-        const SizedBox(width: 12),
-
-        // NOTIFIKASI
         Container(
           width: 45,
           height: 45,
@@ -170,36 +279,13 @@ class _DashboardPageState extends State<DashboardPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(10),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
+              BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 10),
             ],
           ),
-
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Icon(
-                Icons.notifications_none,
-                size: 27,
-                color: Colors.grey,
-              ),
-
-              Positioned(
-                right: 10,
-                top: 9,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
+          child: IconButton(
+            tooltip: 'Refresh dashboard',
+            onPressed: isLoading ? null : loadDashboard,
+            icon: const Icon(Icons.refresh_rounded, color: primaryColor),
           ),
         ),
       ],
@@ -209,38 +295,34 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============================================================
   // WELCOME CARD
   // ============================================================
-  Widget _buildWelcomeCard() {
+
+  Widget buildWelcomeCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-
       decoration: BoxDecoration(
         color: lightGreen,
         borderRadius: BorderRadius.circular(20),
       ),
-
-      child: Row(
+      child: const Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Selamat datang, Guru BK 👋",
+                  'Selamat datang, Guru BK 👋',
                   style: TextStyle(
-                    decoration: TextDecoration.none,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: darkPrimary,
                   ),
                 ),
-
                 SizedBox(height: 8),
-
                 Text(
-                  "Pantau kondisi siswa dan tindak lanjuti laporan yang membutuhkan perhatian.",
+                  'Pantau kondisi siswa dan tindak lanjuti '
+                  'laporan yang membutuhkan perhatian.',
                   style: TextStyle(
-                    decoration: TextDecoration.none,
                     fontSize: 12,
                     color: Color(0xff55736D),
                     height: 1.5,
@@ -249,273 +331,30 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
           ),
-
-          const SizedBox(width: 15),
-
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: const Color(0xffD7EFE8),
-              borderRadius: BorderRadius.circular(18),
-            ),
-
-            child: const Icon(
-              Icons.health_and_safety_outlined,
-              color: primaryColor,
-              size: 31,
-            ),
-          ),
+          SizedBox(width: 15),
+          Icon(Icons.health_and_safety_outlined, size: 48, color: primaryColor),
         ],
       ),
     );
   }
 
   // ============================================================
-  // FILTER
+  // STATISTIK CARD
   // ============================================================
-  Widget _buildFilter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Rentang Waktu",
-          style: TextStyle(
-            decoration: TextDecoration.none,
-            fontSize: 13,
-            color: Colors.grey,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
 
-        const SizedBox(height: 8),
-
-        Container(
-          height: 52,
-          width: double.infinity,
-
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-
-            border: Border.all(color: const Color(0xffE4EBE8)),
-          ),
-
-          child: Row(
-            children: [
-              Container(
-                width: 35,
-                height: 35,
-
-                decoration: BoxDecoration(
-                  color: lightGreen,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-
-                child: const Icon(
-                  Icons.calendar_month_outlined,
-                  color: primaryColor,
-                  size: 20,
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: selectedRange,
-                    isExpanded: true,
-
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.grey,
-                    ),
-
-                    style: const TextStyle(
-                      decoration: TextDecoration.none,
-                      color: Color(0xff3B4A47),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-
-                    items: const [
-                      DropdownMenuItem(
-                        value: "7 Hari Terakhir",
-                        child: Text(
-                          "7 Hari Terakhir",
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      DropdownMenuItem(
-                        value: "30 Hari Terakhir",
-                        child: Text(
-                          "30 Hari Terakhir",
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      DropdownMenuItem(
-                        value: "3 Bulan Terakhir",
-                        child: Text(
-                          "3 Bulan Terakhir",
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          selectedRange = value;
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // GRID STATISTIK RESPONSIVE
-  // ============================================================
-  Widget _buildStatisticGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        int crossAxisCount;
-
-        if (constraints.maxWidth >= 900) {
-          crossAxisCount = 4;
-        } else if (constraints.maxWidth >= 350) {
-          crossAxisCount = 2;
-        } else {
-          crossAxisCount = 1;
-        }
-
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-
-          shrinkWrap: true,
-
-          physics: const NeverScrollableScrollPhysics(),
-
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-
-          // Tinggi card dibuat tetap agar isi
-          // tidak overflow ke bawah.
-          mainAxisExtent: 165,
-
-          children: const [
-            StatCard(
-              title: "Total Laporan",
-              value: "128",
-              subtitle: "Semua laporan",
-              icon: Icons.description_outlined,
-              iconBackground: Color(0xffE9F7F1),
-              iconColor: primaryColor,
-            ),
-
-            StatCard(
-              title: "Sedang Ditangani",
-              value: "23",
-              subtitle: "Sedang diproses",
-              icon: Icons.hourglass_bottom_rounded,
-              iconBackground: Color(0xffFFF4E1),
-              iconColor: Color(0xffF59E0B),
-            ),
-
-            StatCard(
-              title: "Selesai",
-              value: "78",
-              subtitle: "Telah diselesaikan",
-              icon: Icons.check_circle_outline_rounded,
-              iconBackground: Color(0xffE8F1FF),
-              iconColor: Color(0xff3B82F6),
-            ),
-
-            StatCard(
-              title: "Risiko Tinggi",
-              value: "5",
-              subtitle: "Butuh perhatian",
-              icon: Icons.warning_amber_rounded,
-              iconBackground: Color(0xffFDECEC),
-              iconColor: Color(0xffEF4444),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // HEADER PRIORITAS
-  // ============================================================
-  Widget _buildRiskHeader() {
-    return Row(
-      children: [
-        const Expanded(
-          child: Text(
-            "Prioritas Risiko",
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-
-            style: TextStyle(
-              decoration: TextDecoration.none,
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: Color(0xff1F2937),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 10),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-
-          decoration: BoxDecoration(
-            color: lightGreen,
-            borderRadius: BorderRadius.circular(20),
-          ),
-
-          child: const Text(
-            "Laporan Aktif",
-
-            style: TextStyle(
-              decoration: TextDecoration.none,
-              color: primaryColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // RISK CARD RESPONSIVE
-  // ============================================================
-  Widget _buildRiskCard() {
+  Widget buildStatCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color iconBackground,
+    required Color iconColor,
+  }) {
     return Container(
-      width: double.infinity,
-
-      padding: const EdgeInsets.all(18),
-
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
-
-        borderRadius: BorderRadius.circular(20),
-
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(10),
@@ -524,173 +363,316 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Kalau ruang sempit, chart dan legend
-          // disusun vertikal.
-          final bool smallScreen = constraints.maxWidth < 430;
-
-          final Widget chart = SizedBox(
-            width: 125,
-            height: 125,
-
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                PieChart(
-                  PieChartData(
-                    centerSpaceRadius: 38,
-                    sectionsSpace: 3,
-                    startDegreeOffset: -90,
-
-                    borderData: FlBorderData(show: false),
-
-                    sections: [
-                      PieChartSectionData(
-                        value: 14,
-                        color: const Color(0xffEF5350),
-                        radius: 15,
-                        title: "",
-                      ),
-
-                      PieChartSectionData(
-                        value: 41,
-                        color: const Color(0xffF4A340),
-                        radius: 15,
-                        title: "",
-                      ),
-
-                      PieChartSectionData(
-                        value: 45,
-                        color: const Color(0xff35B99A),
-                        radius: 15,
-                        title: "",
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      "124",
-                      style: TextStyle(
-                        decoration: TextDecoration.none,
-                        fontSize: 21,
-                        fontWeight: FontWeight.bold,
-                        color: darkPrimary,
-                      ),
-                    ),
-
-                    SizedBox(height: 2),
-
-                    Text(
-                      "Laporan",
-                      style: TextStyle(
-                        decoration: TextDecoration.none,
-                        fontSize: 10,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: iconBackground,
+              borderRadius: BorderRadius.circular(12),
             ),
-          );
+            child: Icon(icon, size: 21, color: iconColor),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold,
+              color: Color(0xff1E2926),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
 
-          const Widget legend = Column(
+  // ============================================================
+  // GRID STATISTIK
+  // ============================================================
+
+  Widget buildStatisticGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 900
+            ? 4
+            : constraints.maxWidth >= 320
+            ? 2
+            : 1;
+
+        return GridView.count(
+          crossAxisCount: columns,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          mainAxisExtent: 165,
+          children: [
+            buildStatCard(
+              title: 'Total Laporan',
+              value: statValue([
+                'total_laporan',
+                'totalLaporan',
+                'total_reports',
+                'totalReports',
+                'total',
+              ]),
+              subtitle: 'Semua laporan',
+              icon: Icons.description_outlined,
+              iconBackground: lightGreen,
+              iconColor: primaryColor,
+            ),
+
+            buildStatCard(
+              title: 'Sedang Ditangani',
+              value: statValue([
+                'sedang_ditangani',
+                'sedangDitangani',
+                'diproses',
+                'in_progress',
+                'inProgress',
+                'processing',
+                'total_diproses',
+              ]),
+              subtitle: 'Sedang diproses',
+              icon: Icons.hourglass_bottom_rounded,
+              iconBackground: const Color(0xffFFF4E1),
+              iconColor: const Color(0xffF59E0B),
+            ),
+
+            buildStatCard(
+              title: 'Selesai',
+              value: statValue([
+                'selesai',
+                'total_selesai',
+                'totalSelesai',
+                'completed',
+                'resolved',
+              ]),
+              subtitle: 'Telah diselesaikan',
+              icon: Icons.check_circle_outline_rounded,
+              iconBackground: const Color(0xffE8F1FF),
+              iconColor: const Color(0xff3B82F6),
+            ),
+
+            buildStatCard(
+              title: 'Risiko Tinggi',
+              value: statValue([
+                'risiko_tinggi',
+                'risikoTinggi',
+                'high_risk',
+                'highRisk',
+                'total_risiko_tinggi',
+              ]),
+              subtitle: 'Butuh perhatian',
+              icon: Icons.warning_amber_rounded,
+              iconBackground: const Color(0xffFDECEC),
+              iconColor: const Color(0xffEF4444),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // LEGEND RISIKO
+  // ============================================================
+
+  Widget riskLegend({
+    required Color color,
+    required String label,
+    required double value,
+    required double total,
+  }) {
+    final percentage = total == 0 ? 0.0 : (value / total) * 100;
+
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RiskLegendItem(
-                color: Color(0xffEF5350),
-                label: "Tinggi",
-                value: "16",
-                percentage: "14%",
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
-
-              SizedBox(height: 14),
-
-              RiskLegendItem(
-                color: Color(0xffF4A340),
-                label: "Sedang",
-                value: "52",
-                percentage: "41%",
-              ),
-
-              SizedBox(height: 14),
-
-              RiskLegendItem(
-                color: Color(0xff35B99A),
-                label: "Rendah",
-                value: "56",
-                percentage: "45%",
+              const SizedBox(height: 3),
+              Text(
+                value.toStringAsFixed(0),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: darkPrimary,
+                ),
               ),
             ],
-          );
+          ),
+        ),
+        Text(
+          '${percentage.toStringAsFixed(1)}%',
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
 
-          return Column(
+  // ============================================================
+  // GRAFIK PRIORITAS RISIKO
+  // ============================================================
+
+  Widget buildRiskCard() {
+    final tinggi = riskValue(['tinggi', 'high', 'highRisk', 'high_risk']);
+
+    final sedang = riskValue(['sedang', 'medium', 'mediumRisk', 'medium_risk']);
+
+    final rendah = riskValue(['rendah', 'low', 'lowRisk', 'low_risk']);
+
+    // Grafik membutuhkan data risiko yang lengkap.
+    if (tinggi == null || sedang == null || rendah == null) {
+      return emptyCard('Distribusi risiko belum tersedia dari API.');
+    }
+
+    if (tinggi < 0 || sedang < 0 || rendah < 0) {
+      return emptyCard('Data distribusi risiko tidak valid.');
+    }
+
+    final total = tinggi + sedang + rendah;
+
+    if (total <= 0) {
+      return emptyCard('Belum ada data risiko untuk ditampilkan.');
+    }
+
+    final chart = SizedBox(
+      width: 135,
+      height: 135,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PieChart(
+            PieChartData(
+              centerSpaceRadius: 40,
+              sectionsSpace: 3,
+              startDegreeOffset: -90,
+              borderData: FlBorderData(show: false),
+              sections: [
+                if (tinggi > 0)
+                  PieChartSectionData(
+                    value: tinggi,
+                    color: highColor,
+                    radius: 17,
+                    title: '',
+                  ),
+                if (sedang > 0)
+                  PieChartSectionData(
+                    value: sedang,
+                    color: mediumColor,
+                    radius: 17,
+                    title: '',
+                  ),
+                if (rendah > 0)
+                  PieChartSectionData(
+                    value: rendah,
+                    color: lowColor,
+                    radius: 17,
+                    title: '',
+                  ),
+              ],
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (smallScreen)
-                Column(
-                  children: [
-                    Center(child: chart),
-
-                    const SizedBox(height: 20),
-
-                    const SizedBox(width: double.infinity, child: legend),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    chart,
-
-                    const SizedBox(width: 20),
-
-                    const Expanded(child: legend),
-                  ],
-                ),
-
-              const SizedBox(height: 18),
-
-              // INFO
-              Container(
-                width: double.infinity,
-
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 11,
-                ),
-
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Icon(Icons.info_outline, color: primaryColor, size: 18),
-
-                    SizedBox(width: 9),
-
-                    Expanded(
-                      child: Text(
-                        "5 laporan risiko tinggi membutuhkan tindak lanjut segera.",
-
-                        style: TextStyle(
-                          decoration: TextDecoration.none,
-                          color: Color(0xff66756F),
-                          fontSize: 11,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
+              Text(
+                total.toStringAsFixed(0),
+                style: const TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                  color: darkPrimary,
                 ),
               ),
+              const Text(
+                'Laporan',
+                style: TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final legend = Column(
+      children: [
+        riskLegend(
+          color: highColor,
+          label: 'Tinggi',
+          value: tinggi,
+          total: total,
+        ),
+        const SizedBox(height: 14),
+        riskLegend(
+          color: mediumColor,
+          label: 'Sedang',
+          value: sedang,
+          total: total,
+        ),
+        const SizedBox(height: 14),
+        riskLegend(
+          color: lowColor,
+          label: 'Rendah',
+          value: rendah,
+          total: total,
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: cardDecoration(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 430) {
+            return Column(
+              children: [chart, const SizedBox(height: 22), legend],
+            );
+          }
+
+          return Row(
+            children: [
+              chart,
+              const SizedBox(width: 20),
+              Expanded(child: legend),
             ],
           );
         },
@@ -701,400 +683,255 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============================================================
   // AKTIVITAS TERBARU
   // ============================================================
-  Widget _buildActivityCard() {
+
+  Widget buildActivityCard() {
+    if (activities.isEmpty) {
+      return emptyCard('Aktivitas terbaru belum tersedia dari API.');
+    }
+
     return Container(
-      width: double.infinity,
-
       padding: const EdgeInsets.symmetric(horizontal: 16),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(18),
-
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-
-      child: const Column(
+      decoration: cardDecoration(),
+      child: Column(
         children: [
-          ActivityItem(
-            icon: Icons.description_outlined,
-            iconBackground: Color(0xffE9F7F1),
-            iconColor: primaryColor,
-            title: "Laporan baru diterima",
-            subtitle: "Siswa mengirim laporan baru",
-            time: "10 menit",
-          ),
+          for (int i = 0; i < activities.length; i++) ...[
+            buildActivityItem(activities[i]),
 
-          Divider(height: 1, color: Color(0xffEEEEEE)),
-
-          ActivityItem(
-            icon: Icons.check_circle_outline,
-            iconBackground: Color(0xffE8F1FF),
-            iconColor: Color(0xff3B82F6),
-            title: "Laporan selesai",
-            subtitle: "Laporan berhasil ditindaklanjuti",
-            time: "1 jam",
-          ),
-
-          Divider(height: 1, color: Color(0xffEEEEEE)),
-
-          ActivityItem(
-            icon: Icons.warning_amber_rounded,
-            iconBackground: Color(0xffFDECEC),
-            iconColor: Color(0xffEF4444),
-            title: "Risiko tinggi terdeteksi",
-            subtitle: "Laporan memerlukan perhatian segera",
-            time: "2 jam",
-          ),
+            if (i != activities.length - 1)
+              const Divider(height: 1, color: Color(0xffEEEEEE)),
+          ],
         ],
       ),
     );
   }
-}
 
-// ============================================================================
-// STAT CARD
-// ============================================================================
-class StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
+  Widget buildActivityItem(Map<String, dynamic> item) {
+    final title =
+        firstValue(item, ['title', 'judul', 'type', 'jenis'])?.toString() ??
+        'Aktivitas laporan';
 
-  final IconData icon;
+    final description =
+        firstValue(item, [
+          'description',
+          'deskripsi',
+          'message',
+          'pesan',
+        ])?.toString() ??
+        '';
 
-  final Color iconBackground;
-  final Color iconColor;
+    final date =
+        firstValue(item, [
+          'createdAt',
+          'created_at',
+          'time',
+          'waktu',
+        ])?.toString() ??
+        '';
 
-  const StatCard({
-    super.key,
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.iconBackground,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(18),
-
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
-
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: iconBackground,
-              borderRadius: BorderRadius.circular(12),
+              color: lightGreen,
+              borderRadius: BorderRadius.circular(13),
             ),
-
-            child: Icon(icon, size: 21, color: iconColor),
-          ),
-
-          const SizedBox(height: 10),
-
-          Text(
-            value,
-
-            maxLines: 1,
-
-            style: const TextStyle(
-              decoration: TextDecoration.none,
-              fontSize: 25,
-              fontWeight: FontWeight.bold,
-              color: Color(0xff1E2926),
-              height: 1,
+            child: const Icon(
+              Icons.description_outlined,
+              color: primaryColor,
+              size: 21,
             ),
           ),
-
-          const SizedBox(height: 7),
-
-          Text(
-            title,
-
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-
-            style: const TextStyle(
-              decoration: TextDecoration.none,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xff34403D),
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          Text(
-            subtitle,
-
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-
-            style: const TextStyle(
-              decoration: TextDecoration.none,
-              fontSize: 10,
-              color: Colors.grey,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: darkPrimary,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+                if (date.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    date,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
       ),
     );
   }
-}
 
-// ============================================================================
-// LEGEND RISIKO
-// ============================================================================
-class RiskLegendItem extends StatelessWidget {
-  final Color color;
+  // ============================================================
+  // REUSABLE CARD DI DALAM FILE INI
+  // ============================================================
 
-  final String label;
-  final String value;
-  final String percentage;
-
-  const RiskLegendItem({
-    super.key,
-    required this.color,
-    required this.label,
-    required this.value,
-    required this.percentage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-
-        const SizedBox(width: 8),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-
-            children: [
-              Text(
-                label,
-
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-
-                style: const TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 11,
-                  color: Colors.grey,
-                ),
-              ),
-
-              const SizedBox(height: 2),
-
-              Text(
-                value,
-
-                style: const TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff293532),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 6),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
-          decoration: BoxDecoration(
-            color: color.withAlpha(20),
-            borderRadius: BorderRadius.circular(15),
-          ),
-
-          child: Text(
-            percentage,
-
-            style: TextStyle(
-              decoration: TextDecoration.none,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
+  BoxDecoration cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withAlpha(10),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
         ),
       ],
     );
   }
-}
 
-// ============================================================================
-// ACTIVITY ITEM
-// ============================================================================
-class ActivityItem extends StatelessWidget {
-  final IconData icon;
+  Widget emptyCard(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: cardDecoration(),
+      child: Column(
+        children: [
+          const Icon(Icons.analytics_outlined, color: Colors.grey, size: 38),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
 
-  final Color iconBackground;
-  final Color iconColor;
-
-  final String title;
-  final String subtitle;
-  final String time;
-
-  const ActivityItem({
-    super.key,
-    required this.icon,
-    required this.iconBackground,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-  });
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15),
-
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final bool verySmall = constraints.maxWidth < 330;
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-
+    return Container(
+      color: backgroundColor,
+      width: double.infinity,
+      height: double.infinity,
+      child: SafeArea(
+        child: RefreshIndicator(
+          color: primaryColor,
+          onRefresh: loadDashboard,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 25, 20, 110),
             children: [
-              Container(
-                width: 42,
-                height: 42,
+              buildHeader(),
 
-                decoration: BoxDecoration(
-                  color: iconBackground,
+              const SizedBox(height: 25),
 
-                  borderRadius: BorderRadius.circular(13),
+              buildWelcomeCard(),
+
+              const SizedBox(height: 28),
+
+              const Text(
+                'Ringkasan Laporan',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xff1F2937),
                 ),
-
-                child: Icon(icon, color: iconColor, size: 21),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(height: 15),
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // LOADING
+              if (isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(25),
+                    child: CircularProgressIndicator(color: primaryColor),
+                  ),
+                ),
 
-                  children: [
-                    Text(
-                      title,
-
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-
-                      style: const TextStyle(
-                        decoration: TextDecoration.none,
-
-                        fontSize: 12,
-
-                        fontWeight: FontWeight.w600,
-
-                        color: Color(0xff34403D),
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    Text(
-                      subtitle,
-
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-
-                      style: const TextStyle(
-                        decoration: TextDecoration.none,
-
-                        fontSize: 10,
-
-                        color: Colors.grey,
-                      ),
-                    ),
-
-                    // Jika layar sangat kecil,
-                    // waktu diletakkan di bawah.
-                    if (verySmall) ...[
-                      const SizedBox(height: 5),
-
-                      Text(
-                        time,
-
-                        style: const TextStyle(
-                          decoration: TextDecoration.none,
-
-                          fontSize: 9.5,
-
-                          color: Colors.grey,
+              // ERROR
+              if (error != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 15),
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Color(0xffFDECEC),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          error!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-
-              // Pada ukuran normal waktu di kanan.
-              if (!verySmall) ...[
-                const SizedBox(width: 10),
-
-                Text(
-                  time,
-
-                  maxLines: 1,
-
-                  style: const TextStyle(
-                    decoration: TextDecoration.none,
-
-                    fontSize: 9.5,
-
-                    color: Colors.grey,
                   ),
                 ),
+
+              if (!isLoading && error == null) ...[
+                // STATISTIK
+                buildStatisticGrid(),
+
+                const SizedBox(height: 28),
+
+                // RISIKO
+                const Text(
+                  'Prioritas Risiko',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff1F2937),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                buildRiskCard(),
+
+                const SizedBox(height: 28),
+
+                // AKTIVITAS
+                const Text(
+                  'Aktivitas Terbaru',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff1F2937),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                buildActivityCard(),
               ],
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }
