@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -17,12 +18,23 @@ class _RegisterGuruState extends State<RegisterGuru> {
   final nipController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final schoolSearchController = TextEditingController();
 
-  // Endpoint register meminta school_id, bukan nama sekolah.
-  final schoolIdController = TextEditingController();
+  String? selectedSchoolId;
+  String? selectedSchoolName;
+  String selectedJenisKelamin = 'Laki-laki';
 
   bool obscurePassword = true;
   bool isLoading = false;
+  bool isSearchingSchool = false;
+  List<Map<String, dynamic>> schoolList = [];
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchSchools();
+  }
 
   @override
   void dispose() {
@@ -30,7 +42,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
     nipController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    schoolIdController.dispose();
+    schoolSearchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -46,6 +59,40 @@ class _RegisterGuruState extends State<RegisterGuru> {
     );
   }
 
+  // Fungsi untuk mengambil daftar sekolah (opsi search sekolah)
+  Future<void> fetchSchools({String query = ''}) async {
+    setState(() => isSearchingSchool = true);
+    try {
+      // Ubah parameter menjadi 'query' sesuai backend req.query.query
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/auth/search${query.isNotEmpty ? '?query=$query' : '?query=a'}'); 
+      final response = await http.get(url, headers: {
+        'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        List data = [];
+
+        // Backend mengembalikan format { schools: [...] }
+        if (decoded is Map && decoded['schools'] is List) {
+          data = decoded['schools'];
+        } else if (decoded is List) {
+          data = decoded;
+        }
+
+        if (mounted) {
+          setState(() {
+            schoolList = data.map((e) => Map<String, dynamic>.from(e)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetch schools: $e');
+    } finally {
+      if (mounted) setState(() => isSearchingSchool = false);
+    }
+  }
+
   Future<void> register() async {
     if (isLoading) return;
 
@@ -53,24 +100,13 @@ class _RegisterGuruState extends State<RegisterGuru> {
     final nip = nipController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text;
-    final schoolId = int.tryParse(schoolIdController.text.trim());
 
-    if (nama.isEmpty ||
-        nip.isEmpty ||
-        email.isEmpty ||
-        password.isEmpty ||
-        schoolIdController.text.trim().isEmpty) {
-      showMessage("Semua data harus diisi");
-      return;
-    }
-
-    if (schoolId == null || schoolId <= 0) {
-      showMessage("ID sekolah harus berupa angka yang valid");
+    if (nama.isEmpty || nip.isEmpty || email.isEmpty || password.isEmpty || selectedSchoolId == null) {
+      showMessage("Semua data termasuk sekolah wajib diisi");
       return;
     }
 
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
     if (!emailRegex.hasMatch(email)) {
       showMessage("Format email tidak valid");
       return;
@@ -97,23 +133,21 @@ class _RegisterGuruState extends State<RegisterGuru> {
               'nama': nama,
               'email': email,
               'password': password,
-              'role': 'guru',
-              'school_id': schoolId,
+              'role': 'guru_bk',
+              'school_id': selectedSchoolId,
               'nip': nip,
+              'jenis_kelamin': selectedJenisKelamin,
             }),
           )
           .timeout(const Duration(seconds: 15));
 
       Map<String, dynamic> data = {};
-
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
           data = decoded;
         }
-      } catch (_) {
-        // Respons kosong atau bukan JSON.
-      }
+      } catch (_) {}
 
       if (!mounted) return;
 
@@ -142,9 +176,7 @@ class _RegisterGuruState extends State<RegisterGuru> {
       if (!mounted) return;
 
       if (e is http.ClientException) {
-        showMessage(
-          'Tidak dapat terhubung ke server. Periksa backend dan URL API.',
-        );
+        showMessage('Tidak dapat terhubung ke server. Periksa backend dan URL API.');
       } else {
         showMessage('Terjadi kesalahan: $e');
       }
@@ -278,218 +310,251 @@ class _RegisterGuruState extends State<RegisterGuru> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF8FCFA),
-      body: Stack(
-        children: [
-          Positioned(
-            top: -60,
-            right: -50,
-            child: Container(
-              width: 170,
-              height: 170,
-              decoration: const BoxDecoration(
-                color: Color(0xffDDF3EC),
-                shape: BoxShape.circle,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(25, 15, 25, 60),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // BACK BUTTON
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.08),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Color(0xff087F72),
+                  ),
+                ),
               ),
-            ),
-          ),
 
-          Positioned(
-            bottom: -40,
-            left: -40,
-            child: Container(
-              width: 130,
-              height: 130,
-              decoration: const BoxDecoration(
-                color: Color(0xffE7F7F2),
-                shape: BoxShape.circle,
+              const SizedBox(height: 30),
+
+              const Text(
+                'Daftar Sebagai\nGuru BK',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xff124F4A),
+                  height: 1.2,
+                ),
               ),
-            ),
-          ),
 
-          SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(25, 15, 25, 60),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // BACK BUTTON
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(.08),
-                          blurRadius: 10,
-                        ),
-                      ],
+              const SizedBox(height: 10),
+
+              const Text(
+                'Lengkapi data pribadi dan pilih sekolah tempat Anda bertugas',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+
+              const SizedBox(height: 35),
+
+              const Text(
+                'Data Pribadi',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xff124F4A),
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
+              input(
+                controller: namaController,
+                hint: 'Nama Lengkap',
+                icon: Icons.person_outline,
+              ),
+
+              input(
+                controller: nipController,
+                hint: 'NIP',
+                icon: Icons.badge_outlined,
+              ),
+
+              input(
+                controller: emailController,
+                hint: 'Email',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+              ),
+
+              passwordInput(),
+
+              // PILIHAN JENIS KELAMIN
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8, top: 4),
+                child: Text(
+                  'Jenis Kelamin',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xff124F4A),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedJenisKelamin,
+                    isExpanded: true,
+                    items: ['Laki-laki', 'Perempuan'].map((String value) {
+                      return DropdownButtonMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      setState(() {
+                        selectedJenisKelamin = newValue!;
+                      });
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // DATA SEKOLAH DENGAN FITUR SEARCH
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
                     ),
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new,
-                        size: 18,
-                        color: Color(0xff087F72),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // LOGO
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.08),
-                            blurRadius: 15,
-                          ),
-                        ],
-                      ),
-                      child: Image.asset('assets/logo_ruang.jpeg', height: 70),
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  const Text(
-                    'Daftar Sebagai\nGuru BK',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff124F4A),
-                      height: 1.2,
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  const Text(
-                    'Lengkapi data untuk mendampingi siswa '
-                    'dengan layanan konseling terbaik',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-
-                  const SizedBox(height: 35),
-
-                  const Text(
-                    'Data Pribadi',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff124F4A),
-                    ),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  input(
-                    controller: namaController,
-                    hint: 'Nama Lengkap',
-                    icon: Icons.person_outline,
-                  ),
-
-                  input(
-                    controller: nipController,
-                    hint: 'NIP / ID Guru',
-                    icon: Icons.badge_outlined,
-                  ),
-
-                  input(
-                    controller: emailController,
-                    hint: 'Email',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-
-                  passwordInput(),
-
-                  const SizedBox(height: 10),
-
-                  // DATA SEKOLAH
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(.05),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
                       children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.school_outlined,
-                              color: Color(0xff087F72),
-                              size: 22,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Data Sekolah',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xff124F4A),
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          Icons.school_outlined,
+                          color: Color(0xff087F72),
+                          size: 22,
                         ),
-
-                        const SizedBox(height: 18),
-
-                        input(
-                          controller: schoolIdController,
-                          hint: 'ID Sekolah',
-                          icon: Icons.school_outlined,
-                          keyboardType: TextInputType.number,
-                        ),
-
-                        const Text(
-                          'Masukkan ID sekolah yang sudah '
-                          'terdaftar pada sistem.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        SizedBox(width: 8),
+                        Text(
+                          'Pilih Sekolah',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xff124F4A),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  registerButton(),
-
-                  const SizedBox(height: 25),
-
-                  Center(
-                    child: Text(
-                      'Aman bercerita • Nyaman berkembang',
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 12,
-                      ),
+                    const SizedBox(height: 15),
+                    TextField(
+                      controller: schoolSearchController,
+                      decoration: inputDecoration('Cari nama sekolah...', Icons.search),
+                      onChanged: (value) {
+                        if (_debounce?.isActive ?? false) _debounce?.cancel();
+                        _debounce = Timer(const Duration(milliseconds: 500), () {
+                          fetchSchools(query: value);
+                        });
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    if (isSearchingSchool)
+                      const Center(child: CircularProgressIndicator(color: Color(0xff087F72)))
+                    else
+                      Container(
+                        height: 150,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade200),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: schoolList.isEmpty
+                            ? const Center(child: Text('Sekolah tidak ditemukan', style: TextStyle(color: Colors.grey)))
+                            : ListView.builder(
+                                itemCount: schoolList.length,
+                                itemBuilder: (context, index) {
+                                  final school = schoolList[index];
+                                  final schoolIdStr = school['id'].toString();
+                                  final schoolName = school['nama_sekolah'] ?? school['nama'] ?? 'Sekolah Tanpa Nama';
+                                  final isSelected = selectedSchoolId == schoolIdStr;
+
+                                  return ListTile(
+                                    title: Text(schoolName, style: const TextStyle(fontSize: 14)),
+                                    selected: isSelected,
+                                    selectedTileColor: const Color(0xffE9F7F1),
+                                    onTap: () {
+                                      setState(() {
+                                        selectedSchoolName = schoolName;
+                                        schoolSearchController.text = schoolName;
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    if (selectedSchoolName != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Dipilih: $selectedSchoolName',
+                        style: const TextStyle(fontSize: 12, color: Color(0xff087F72), fontWeight: FontWeight.bold),
+                      ),
+                    ]
+                  ],
+                ),
               ),
-            ),
+
+              const SizedBox(height: 25),
+
+              registerButton(),
+
+              const SizedBox(height: 25),
+
+              Center(
+                child: Text(
+                  'Aman bercerita • Nyaman berkembang',
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+// Helper kecil agar DropdownButton tidak error tipe data di Flutter modern
+class DropdownButtonMenuItem<T> extends DropdownMenuItem<T> {
+  const DropdownButtonMenuItem({
+    super.key,
+    required super.value,
+    required super.child,
+  });
 }

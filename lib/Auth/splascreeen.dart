@@ -14,10 +14,10 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    Timer(const Duration(seconds: 10), () {
+    Timer(const Duration(seconds: 3), () {
       Navigator.pushReplacement(
         context,
-
+  
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     });

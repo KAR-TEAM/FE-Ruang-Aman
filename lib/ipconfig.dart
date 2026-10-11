@@ -4,6 +4,7 @@ class ApiConfig {
   //Auth
   static const String register = '$baseUrl/api/auth/register';
   static const String login = '$baseUrl/api/auth/login';
+  static const String searchSchool = '$baseUrl/api/auth/search';
 
   // Admin
     static const String superadminStats =
@@ -23,17 +24,19 @@ class ApiConfig {
 
   // Siswa
     static const String dashboardSiswa =
-        '$baseUrl/api/reports/dashboard-siswa';
+        '$baseUrl/api/siswa/dashboard-siswa';
     static const String myReports =
-        '$baseUrl/api/reports/my-reports';
+        '$baseUrl/api/siswa/my-reports';
     static const String createReport =
-        '$baseUrl/api/reports/';
+        '$baseUrl/api/siswa/';
 
   // Guru
     static const String bkDashboardStats =
-        '$baseUrl/api/bk/dashboard/stats';
+        '$baseUrl/api/bk/stats';
     static const String bkReports =
         '$baseUrl/api/bk/reports';
+    static const String bkSiswa = 
+        '$baseUrl/api/bk/siswa';
     static String bkReportFollowups(dynamic id) =>
         '$baseUrl/api/bk/reports/${Uri.encodeComponent(id.toString())}/followups';
 }

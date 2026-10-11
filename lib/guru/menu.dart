@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ruang_aman/guru/home.dart';
+import 'package:ruang_aman/guru/dashboard.dart';
 import 'package:ruang_aman/guru/laporan/laporanmasuk.dart';
 import 'package:ruang_aman/guru/siswa/datasiswa.dart';
 import 'package:ruang_aman/guru/profile.dart';

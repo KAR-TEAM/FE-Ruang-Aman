@@ -9,7 +9,8 @@ import 'package:ruang_aman/ipconfig.dart';
 import 'package:ruang_aman/Auth/register.dart';
 import 'package:ruang_aman/siswa/menu.dart';
 import 'package:ruang_aman/guru/menu.dart';
-import 'package:ruang_aman/admin/menu.dart';
+import 'package:ruang_aman/superadmin/menu.dart';
+import 'package:ruang_aman/Auth/reset_password.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -143,71 +144,53 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final user = rawUser;
 
+      // Normalisasi role menjadi huruf kecil untuk pengecekan yang lebih aman
       final role = user['role']?.toString().toLowerCase().trim() ?? '';
-
       final nama = user['nama']?.toString() ?? 'Pengguna';
 
-      if (role != 'siswa' && role != 'guru' && role != 'guru_bk') {
+      // Validasi role yang diizinkan masuk
+      if (role != 'siswa' && role != 'guru bk' && role != 'admin' && role != 'admin sekolah' && role != 'superadmin') {
         showMessage('Role tidak dikenali: $role');
         return;
       }
 
-      // SIMPAN TOKEN JWT
-      // Token sesi disimpan, tetapi login otomatis
-      // harus dibuat terpisah saat aplikasi dibuka.
+      // Simpan token JWT dan data user
       await storage.write(key: 'auth_token', value: token);
-
       await storage.write(key: 'auth_user', value: jsonEncode(user));
-
       await storage.write(key: 'remember_me', value: rememberMe.toString());
 
       if (!mounted) return;
 
-      debugPrint('LOGIN BERHASIL');
-      debugPrint('Nama: $nama');
-      debugPrint('Role: $role');
-
       showMessage('Selamat datang, $nama!', success: true);
 
-      // NAVIGASI SESUAI ROLE
-      
       // ==============================================
       // NAVIGASI BERDASARKAN ROLE USER
       // ==============================================
-
-      if (role == 'superadmin' || role == 'super_admin') {
-
-        // LOGIN SUPERADMIN
+      if (role == 'superadmin') {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (_) => const MenuSuperadmin(),
-          ),
+          MaterialPageRoute(builder: (_) => const MenuSuperadmin()),
           (route) => false,
         );
-
+      } else if (role == 'admin' || role == 'admin sekolah') {
+        // // NAVIGASI ADMIN SEKOLAH (Pastikan file MenuAdmin sudah di-import)
+        // Navigator.pushAndRemoveUntil(
+        //   context,
+        //   MaterialPageRoute(builder: (_) => const MenuAdminsekolah()),
+        //   (route) => false,
+        // );
       } else if (role == 'siswa') {
-
-        // LOGIN SISWA
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (_) => const MenuPage(),
-          ),
+          MaterialPageRoute(builder: (_) => const MenuPage()),
           (route) => false,
         );
-
-      } else if (role == 'guru' || role == 'guru_bk') {
-
-        // LOGIN GURU BK
+      } else if (role == 'guru bk') {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (_) => const MainPageguru(),
-          ),
+          MaterialPageRoute(builder: (_) => const MainPageguru()),
           (route) => false,
         );
-
       }
 
     } on TimeoutException {
@@ -410,7 +393,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           TextButton(
                             onPressed: () {
-                              showMessage('Fitur lupa password belum tersedia');
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ResetPasswordPage(),
+                                ),
+                              );
                             },
                             child: const Text(
                               'Lupa password?',

@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:ruang_aman/ipconfig.dart';
-import 'package:ruang_aman/admin/admin_sekolah.dart';
+import 'package:ruang_aman/superadmin/admin_sekolah.dart';
 
 class SekolahSuperadmin extends StatefulWidget {
   const SekolahSuperadmin({super.key});

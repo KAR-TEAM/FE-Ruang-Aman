@@ -195,7 +195,7 @@ class _LaporanMasukPageState extends State<LaporanMasukPage> {
   // GET /api/bk/reports
   // ============================================================
 
-  Future<void> loadReports() async {
+  Future<void> loadReports({String? priorityFilter}) async {
     if (!mounted) return;
 
     setState(() {
@@ -206,9 +206,15 @@ class _LaporanMasukPageState extends State<LaporanMasukPage> {
     try {
       final token = await getToken();
 
+      // Membangun URL dengan query parameter jika filter dipilih
+      String url = ApiConfig.bkReports;
+      if (priorityFilter != null && priorityFilter != 'Semua') {
+        url += '?priority=${Uri.encodeComponent(priorityFilter)}';
+      }
+
       final response = await http
           .get(
-            Uri.parse(ApiConfig.bkReports),
+            Uri.parse(url),
             headers: {
               'Accept': 'application/json',
               'Authorization': 'Bearer $token',
@@ -339,7 +345,7 @@ class _LaporanMasukPageState extends State<LaporanMasukPage> {
       'risk_level',
       'riskLevel',
       'risiko',
-      'prioritas',
+      'priority',
     ]);
 
     switch (raw.trim().toLowerCase()) {
@@ -586,6 +592,7 @@ class _LaporanMasukPageState extends State<LaporanMasukPage> {
       child: InkWell(
         onTap: () {
           setState(() => selectedFilter = label);
+          loadReports(priorityFilter: label); // Ambil data sesuai filter dari backend
         },
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
@@ -610,7 +617,7 @@ class _LaporanMasukPageState extends State<LaporanMasukPage> {
       ),
     );
   }
-
+  
   // ============================================================
   // FILTER BOTTOM SHEET
   // ============================================================

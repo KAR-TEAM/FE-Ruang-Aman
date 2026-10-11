@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:ruang_aman/ipconfig.dart';
-import 'package:ruang_aman/admin/admin_sekolah.dart';
+import 'package:ruang_aman/superadmin/admin_sekolah.dart';
 
 class DashboardSuperadmin extends StatefulWidget {
   final ValueChanged<int> onNavigate;
@@ -252,55 +252,55 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
     );
   }
 
-  // ============================================================
-  // WELCOME CARD
-  // ============================================================
+  // // ============================================================
+  // // WELCOME CARD
+  // // ============================================================
 
-  Widget buildWelcomeCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: lightGreen,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Selamat datang, Superadmin 👋',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: darkPrimary,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Pantau perkembangan sistem, kelola sekolah, '
-                  'dan atur pengguna dalam satu aplikasi.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xff55736D),
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 12),
-          Icon(
-            Icons.admin_panel_settings_outlined,
-            size: 48,
-            color: primaryColor,
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget buildWelcomeCard() {
+  //   return Container(
+  //     width: double.infinity,
+  //     padding: const EdgeInsets.all(18),
+  //     decoration: BoxDecoration(
+  //       color: lightGreen,
+  //       borderRadius: BorderRadius.circular(20),
+  //     ),
+  //     child: const Row(
+  //       children: [
+  //         Expanded(
+  //           child: Column(
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+  //               Text(
+  //                 'Selamat datang, Superadmin 👋',
+  //                 style: TextStyle(
+  //                   fontSize: 18,
+  //                   fontWeight: FontWeight.bold,
+  //                   color: darkPrimary,
+  //                 ),
+  //               ),
+  //               SizedBox(height: 8),
+  //               Text(
+  //                 'Pantau perkembangan sistem, kelola sekolah, '
+  //                 'dan atur pengguna dalam satu aplikasi.',
+  //                 style: TextStyle(
+  //                   fontSize: 12,
+  //                   color: Color(0xff55736D),
+  //                   height: 1.5,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //         SizedBox(width: 12),
+  //         Icon(
+  //           Icons.admin_panel_settings_outlined,
+  //           size: 48,
+  //           color: primaryColor,
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   // ============================================================
   // CARD STATISTIK
@@ -555,19 +555,9 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
               const SizedBox(height: 25),
 
               // WELCOME
-              buildWelcomeCard(),
+              // buildWelcomeCard(),
 
-              const SizedBox(height: 28),
-
-              // RINGKASAN
-              const Text(
-                'Ringkasan Sistem',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff1F2937),
-                ),
-              ),
+              // const SizedBox(height: 28),
 
               const SizedBox(height: 15),
 
@@ -618,54 +608,6 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
                 buildStatisticGrid(),
 
               const SizedBox(height: 28),
-
-              // MANAJEMEN SISTEM
-              const Text(
-                'Manajemen Sistem',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff1F2937),
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              menuCard(
-                title: 'Manajemen Sekolah',
-                subtitle:
-                    'Tambah, edit, cari, dan hapus sekolah',
-                icon: Icons.school_outlined,
-                onTap: () {
-                  widget.onNavigate(1);
-                },
-              ),
-
-              menuCard(
-                title: 'Admin Sekolah',
-                subtitle:
-                    'Buat akun admin sekolah baru',
-                icon: Icons.person_add_alt_outlined,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const AdminSekolahPage(),
-                    ),
-                  );
-                },
-              ),
-
-              menuCard(
-                title: 'Manajemen Pengguna',
-                subtitle:
-                    'Kelola siswa, Guru BK, dan admin',
-                icon: Icons.people_outline,
-                onTap: () {
-                  widget.onNavigate(2);
-                },
-              ),
             ],
           ),
         ),

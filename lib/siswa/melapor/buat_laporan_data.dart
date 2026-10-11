@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -31,7 +30,9 @@ class _BuatLaporanDataPageState
 
   final namaController = TextEditingController();
   final kelasController = TextEditingController();
-  final hpController = TextEditingController();
+  final tanggalController = TextEditingController();
+  final waktuController = TextEditingController();
+  final lokasiController = TextEditingController();
   final kronologiController = TextEditingController();
 
   String? jenis;
@@ -55,7 +56,9 @@ class _BuatLaporanDataPageState
   void dispose() {
     namaController.dispose();
     kelasController.dispose();
-    hpController.dispose();
+    tanggalController.dispose();
+    waktuController.dispose();
+    lokasiController.dispose();
     kronologiController.dispose();
     super.dispose();
   }
@@ -81,13 +84,6 @@ class _BuatLaporanDataPageState
 
             kelasController.text =
                 decoded['kelas']?.toString() ?? '';
-
-            hpController.text = (
-              decoded['nomor_hp'] ??
-              decoded['no_hp'] ??
-              decoded['phone'] ??
-              ''
-            ).toString();
           });
         }
       }
@@ -97,6 +93,59 @@ class _BuatLaporanDataPageState
       if (mounted) {
         setState(() => loadingProfile = false);
       }
+    }
+  }
+
+  // =============================================
+  // PILIH TANGGAL KEJADIAN
+  // =============================================
+  Future<void> selectDate() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2025),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(primary: primaryColor),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      String formattedDate = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      setState(() {
+        tanggalController.text = formattedDate;
+      });
+    }
+  }
+
+  // =============================================
+  // PILIH WAKTU KEJADIAN
+  // =============================================
+  Future<void> selectTime() async {
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(primary: primaryColor),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final hours = picked.hour.toString().padLeft(2, '0');
+      final minutes = picked.minute.toString().padLeft(2, '0');
+      setState(() {
+        waktuController.text = "$hours:$minutes";
+      });
     }
   }
 
@@ -142,15 +191,16 @@ class _BuatLaporanDataPageState
         );
       }
 
-      // Sesuaikan nama field dengan backend.
-      // Mode ini bukan laporan anonim.
+      // Payload disesuaikan dengan struktur backend
       final Map<String, dynamic> payload = {
         'nama': namaController.text.trim(),
         'kelas': kelasController.text.trim(),
-        'nomor_hp': hpController.text.trim(),
-        'jenis_kejadian': jenis,
+        'jenis': jenis,
+        'lokasi': lokasiController.text.trim(),
+        'tanggal_kejadian': tanggalController.text.trim(),
+        'waktu_kejadian': waktuController.text.trim().isEmpty ? null : waktuController.text.trim(),
         'kronologi': kronologiController.text.trim(),
-        'is_anonymous': false,
+        'anonymous': false,
       };
 
       final response = await http
@@ -190,8 +240,7 @@ class _BuatLaporanDataPageState
       }
 
       if (response.statusCode < 200 ||
-          response.statusCode >= 300 ||
-          (result is Map && result['success'] == false)) {
+          response.statusCode >= 300) {
         final message = result is Map
             ? result['message']?.toString()
             : null;
@@ -252,8 +301,9 @@ class _BuatLaporanDataPageState
   // =============================================
   InputDecoration inputDecoration(
     String hint,
-    IconData icon,
-  ) {
+    IconData icon, {
+    Widget? suffixIcon,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
@@ -265,6 +315,7 @@ class _BuatLaporanDataPageState
         size: 19,
         color: primaryColor,
       ),
+      suffixIcon: suffixIcon,
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(
@@ -299,13 +350,18 @@ class _BuatLaporanDataPageState
     required IconData icon,
     TextInputType? keyboardType,
     int maxLines = 1,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    Widget? suffixIcon,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      decoration: inputDecoration(hint, icon),
+      readOnly: readOnly,
+      onTap: onTap,
+      decoration: inputDecoration(hint, icon, suffixIcon: suffixIcon),
       validator: validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
@@ -394,57 +450,30 @@ class _BuatLaporanDataPageState
                     ),
                   ),
 
-                // NAMA
+                // NAMA LENGKAP
                 formLabel('Nama Lengkap'),
-
                 inputField(
                   controller: namaController,
-                  hint: 'Masukkan nama lengkap',
+                  hint: 'Nama lengkap pelapor',
                   icon: Icons.person_outline,
+                  readOnly: true, // Karena sesuai data login
                 ),
 
                 const SizedBox(height: 18),
 
                 // KELAS
                 formLabel('Kelas'),
-
                 inputField(
                   controller: kelasController,
-                  hint: 'Contoh: XI IPA 2',
+                  hint: 'Kelas pelapor',
                   icon: Icons.school_outlined,
+                  // readOnly: true, // Karena sesuai data login
                 ),
 
                 const SizedBox(height: 18),
 
-                // NOMOR HP
-                formLabel('Nomor HP'),
-
-                inputField(
-                  controller: hpController,
-                  hint: 'Masukkan nomor HP',
-                  icon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    final phone = value?.trim() ?? '';
-
-                    if (phone.isEmpty) {
-                      return 'Nomor HP wajib diisi';
-                    }
-
-                    if (!RegExp(r'^[0-9+]{9,15}$')
-                        .hasMatch(phone)) {
-                      return 'Format nomor HP tidak valid';
-                    }
-
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 25),
-
                 // JENIS KEJADIAN
                 formLabel('Jenis Kejadian'),
-
                 DropdownButtonFormField<String>(
                   value: jenis,
                   isExpanded: true,
@@ -476,11 +505,47 @@ class _BuatLaporanDataPageState
                   },
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
+
+                // LOKASI KEJADIAN
+                formLabel('Lokasi Kejadian'),
+                inputField(
+                  controller: lokasiController,
+                  hint: 'Contoh: Kantin Sekolah / Kelas X-2',
+                  icon: Icons.location_on_outlined,
+                ),
+
+                const SizedBox(height: 18),
+
+                // TANGGAL KEJADIAN
+                formLabel('Tanggal Kejadian'),
+                inputField(
+                  controller: tanggalController,
+                  hint: 'Pilih tanggal kejadian',
+                  icon: Icons.calendar_today_outlined,
+                  readOnly: true,
+                  onTap: selectDate,
+                  suffixIcon: const Icon(Icons.arrow_drop_down, color: primaryColor),
+                ),
+
+                const SizedBox(height: 18),
+
+                // WAKTU KEJADIAN (OPSIONAL)
+                formLabel('Waktu Kejadian (Opsional)'),
+                inputField(
+                  controller: waktuController,
+                  hint: 'Pilih waktu kejadian',
+                  icon: Icons.access_time_outlined,
+                  readOnly: true,
+                  onTap: selectTime,
+                  suffixIcon: const Icon(Icons.arrow_drop_down, color: primaryColor),
+                  validator: (_) => null, // Opsional
+                ),
+
+                const SizedBox(height: 18),
 
                 // KRONOLOGI
                 formLabel('Kronologi Kejadian'),
-
                 inputField(
                   controller: kronologiController,
                   hint: 'Ceritakan apa yang terjadi...',
@@ -488,11 +553,10 @@ class _BuatLaporanDataPageState
                   maxLines: 5,
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
-                // UPLOAD BUKTI
+                // UPLOAD BUKTI (OPSIONAL)
                 formLabel('Upload Bukti (Opsional)'),
-
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
