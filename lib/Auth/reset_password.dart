@@ -19,7 +19,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final emailController = TextEditingController();
   final newPasswordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
-  
+
   // 6 Controller untuk input OTP
   final List<TextEditingController> otpControllers = List.generate(
     6,
@@ -78,11 +78,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() => isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/forgot-password'),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: jsonEncode({'email': email}),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/forgot-password'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 30));
 
       Map<String, dynamic> data = {};
       try {
@@ -92,7 +97,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       if (!mounted) return;
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        showMessage(data['message'] ?? "Kode OTP berhasil dikirim ke email.", success: true);
+        showMessage(
+          data['message'] ?? "Kode OTP berhasil dikirim ke email.",
+          success: true,
+        );
         setState(() {
           currentStep = 2; // Pindah ke form verifikasi OTP
         });
@@ -122,14 +130,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() => isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-otp'),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'otp_code': otp,
-        }),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/verify-otp'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'email': email, 'otp_code': otp}),
+          )
+          .timeout(const Duration(seconds: 30));
 
       Map<String, dynamic> data = {};
       try {
@@ -140,12 +150,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         verifiedOtpCode = otp; // Simpan OTP yang valid
-        showMessage("OTP terverifikasi. Silakan masukkan password baru.", success: true);
+        showMessage(
+          "OTP terverifikasi. Silakan masukkan password baru.",
+          success: true,
+        );
         setState(() {
           currentStep = 3; // Pindah ke form input password baru
         });
       } else {
-        showMessage(data['message'] ?? "Kode OTP salah atau sudah kedaluwarsa.");
+        showMessage(
+          data['message'] ?? "Kode OTP salah atau sudah kedaluwarsa.",
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -181,15 +196,20 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() => isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/reset-password'),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'otp_code': verifiedOtpCode,
-          'newPassword': newPassword,
-        }),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/auth/reset-password'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email,
+              'otp_code': verifiedOtpCode,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
       Map<String, dynamic> data = {};
       try {
@@ -199,7 +219,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       if (!mounted) return;
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        showMessage(data['message'] ?? "Password berhasil diubah. Silakan login.", success: true);
+        showMessage(
+          data['message'] ?? "Password berhasil diubah. Silakan login.",
+          success: true,
+        );
         Navigator.pop(context); // Kembali ke halaman login
       } else {
         showMessage(data['message'] ?? "Gagal mereset password.");
@@ -234,11 +257,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     String titleText = "Reset\nPassword";
-    String subtitleText = "Masukkan email akunmu untuk menerima kode OTP pemulihan sandi.";
+    String subtitleText =
+        "Masukkan email akunmu untuk menerima kode OTP pemulihan sandi.";
 
     if (currentStep == 2) {
       titleText = "Verifikasi\nKode OTP";
-      subtitleText = "Masukkan 6 digit kode OTP yang dikirimkan ke email ${emailController.text}";
+      subtitleText =
+          "Masukkan 6 digit kode OTP yang dikirimkan ke email ${emailController.text}";
     } else if (currentStep == 3) {
       titleText = "Buat Password\nBaru";
       subtitleText = "Pastikan password barunya kuat dan mudah diingat.";
@@ -306,22 +331,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.08),
-                            blurRadius: 15,
-                          ),
-                        ],
-                      ),
-                      child: Image.asset("assets/logo_ruang.jpeg", height: 70),
-                    ),
-                  ),
                   const SizedBox(height: 25),
                   Text(
                     titleText,
@@ -350,7 +359,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: inputDecoration("Email terdaftar", Icons.email_outlined),
+                      decoration: inputDecoration(
+                        "Email terdaftar",
+                        Icons.email_outlined,
+                      ),
                     ),
                     const SizedBox(height: 25),
                     SizedBox(
@@ -366,55 +378,85 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           ),
                         ),
                         child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("Kirim Kode OTP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
+                            : const Text(
+                                "Kirim Kode OTP",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ]
-
                   // ==========================================
                   // TAHAP 2: INPUT KODE OTP
                   // ==========================================
                   else if (currentStep == 2) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(6, (index) {
-                        return SizedBox(
-                          width: 45,
-                          height: 55,
-                          child: TextField(
-                            controller: otpControllers[index],
-                            focusNode: focusNodes[index],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            maxLength: 1,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xff124F4A)),
-                            decoration: InputDecoration(
-                              counterText: "",
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: EdgeInsets.zero,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey.shade200),
+                    // Gunakan FittedBox atau bungkus dengan SingleChildScrollView / Flexible agar aman dari overflow
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(6, (index) {
+                          return Container(
+                            width:
+                                42, // Sedikit dikurangi dari 45 agar muat di layar kecil
+                            height: 50, // Sedikit dikurangi dari 55
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ), // Berikan jarak antar kotak secara konsisten
+                            child: TextField(
+                              controller: otpControllers[index],
+                              focusNode: focusNodes[index],
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              maxLength: 1,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xff124F4A),
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
+                              decoration: InputDecoration(
+                                counterText: "",
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: EdgeInsets.zero,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade200,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xff087F72),
+                                    width: 2,
+                                  ),
+                                ),
                               ),
+                              onChanged: (value) {
+                                if (value.isNotEmpty && index < 5) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(focusNodes[index + 1]);
+                                }
+                                if (value.isEmpty && index > 0) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(focusNodes[index - 1]);
+                                }
+                              },
                             ),
-                            onChanged: (value) {
-                              if (value.isNotEmpty && index < 5) {
-                                FocusScope.of(context).requestFocus(focusNodes[index + 1]);
-                              }
-                              if (value.isEmpty && index > 0) {
-                                FocusScope.of(context).requestFocus(focusNodes[index - 1]);
-                              }
-                            },
-                          ),
-                        );
-                      }),
+                          );
+                        }),
+                      ),
                     ),
                     const SizedBox(height: 25),
                     SizedBox(
@@ -430,12 +472,19 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           ),
                         ),
                         child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("Verifikasi OTP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
+                            : const Text(
+                                "Verifikasi OTP",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ]
-
                   // ==========================================
                   // TAHAP 3: MASUKKAN PASSWORD BARU
                   // ==========================================
@@ -443,29 +492,46 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     TextField(
                       controller: newPasswordController,
                       obscureText: obscurePassword,
-                      decoration: inputDecoration("Password Baru (Min. 6 Karakter)", Icons.lock_outline).copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => setState(() => obscurePassword = !obscurePassword),
-                          icon: Icon(
-                            obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                            color: Colors.grey,
+                      decoration:
+                          inputDecoration(
+                            "Password Baru (Min. 6 Karakter)",
+                            Icons.lock_outline,
+                          ).copyWith(
+                            suffixIcon: IconButton(
+                              onPressed: () => setState(
+                                () => obscurePassword = !obscurePassword,
+                              ),
+                              icon: Icon(
+                                obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 15),
                     TextField(
                       controller: confirmPasswordController,
                       obscureText: obscureConfirmPassword,
-                      decoration: inputDecoration("Konfirmasi Password Baru", Icons.lock_outline).copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
-                          icon: Icon(
-                            obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                            color: Colors.grey,
+                      decoration:
+                          inputDecoration(
+                            "Konfirmasi Password Baru",
+                            Icons.lock_outline,
+                          ).copyWith(
+                            suffixIcon: IconButton(
+                              onPressed: () => setState(
+                                () => obscureConfirmPassword =
+                                    !obscureConfirmPassword,
+                              ),
+                              icon: Icon(
+                                obscureConfirmPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 25),
                     SizedBox(
@@ -481,8 +547,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           ),
                         ),
                         child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("Simpan Password Baru", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
+                            : const Text(
+                                "Simpan Password Baru",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ],

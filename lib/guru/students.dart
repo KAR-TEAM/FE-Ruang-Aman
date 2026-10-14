@@ -39,7 +39,6 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
     super.dispose();
   }
 
-  // Ambil Data Siswa dari API Backend
   Future<void> loadSiswa() async {
     if (!mounted) return;
 
@@ -91,7 +90,18 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
     }
   }
 
-  // Filter Lokal Berdasarkan Kelas & Search Input
+  List<String> get availableKelas {
+    final setKelas = <String>{};
+    for (var siswa in siswaList) {
+      final k = siswa["kelas"]?.toString().trim();
+      if (k != null && k.isNotEmpty && k != '-') {
+        setKelas.add(k);
+      }
+    }
+    final sortedList = setKelas.toList()..sort();
+    return ["Semua", ...sortedList];
+  }
+
   List<Map<String, dynamic>> get filteredSiswa {
     final keyword = searchController.text.toLowerCase().trim();
 
@@ -115,6 +125,7 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
   @override
   Widget build(BuildContext context) {
     final filtered = filteredSiswa;
+    final listKelas = availableKelas;
 
     return Container(
       width: double.infinity,
@@ -126,59 +137,40 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
           onRefresh: loadSiswa,
           child: Column(
             children: [
-              // HEADER
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
                 child: _buildHeader(),
               ),
-
               const SizedBox(height: 20),
-
-              // SEARCH
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _buildSearch(),
               ),
-
               const SizedBox(height: 17),
-
-              // FILTER KELAS (Dibuat dinamis dari data atau list kelas standar)
               SizedBox(
-                height: 42,
-                child: ListView(
+                height: 40,
+                child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    _kelasButton("Semua"),
-                    _kelasButton("XI IPA 1"),
-                    _kelasButton("XI IPA 2"),
-                    _kelasButton("XI IPS 1"),
-                  ],
+                  itemCount: listKelas.length,
+                  itemBuilder: (context, index) {
+                    return _kelasButton(listKelas[index]);
+                  },
                 ),
               ),
-
               const SizedBox(height: 15),
-
-              // JUMLAH SISWA
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
                     Text(
                       isLoading ? "Memuat data siswa..." : "${filtered.length} siswa ditemukan",
-                      style: const TextStyle(
-                        decoration: TextDecoration.none,
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 5),
-
-              // LIST SISWA / LOADING / ERROR
+              const SizedBox(height: 8),
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator(color: primaryColor))
@@ -191,22 +183,12 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
                           )
                         : filtered.isEmpty
                             ? _emptyState()
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(maxWidth: 1100),
-                                      child: ListView.separated(
-                                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
-                                        itemCount: filtered.length,
-                                        separatorBuilder: (context, index) => const SizedBox(height: 12),
-                                        itemBuilder: (context, index) {
-                                          return _siswaCard(filtered[index]);
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                },
+                            : ListView.separated(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                itemBuilder: (context, index) => _siswaCard(filtered[index]),
                               ),
               ),
             ],
@@ -225,21 +207,12 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
             children: [
               Text(
                 "Data Siswa",
-                style: TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 23,
-                  fontWeight: FontWeight.bold,
-                  color: darkPrimary,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkPrimary),
               ),
               SizedBox(height: 4),
               Text(
-                "Kelola dan pantau data siswa",
-                style: TextStyle(
-                  decoration: TextDecoration.none,
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
+                "Kelola dan pantau data siswa terdaftar",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
@@ -247,15 +220,8 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
-            color: lightGreen,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(
-            Icons.people_outline_rounded,
-            color: primaryColor,
-            size: 25,
-          ),
+          decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(14)),
+          child: const Icon(Icons.people_outline_rounded, color: primaryColor, size: 24),
         ),
       ],
     );
@@ -265,9 +231,9 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(7), blurRadius: 10, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 10, offset: const Offset(0, 3)),
         ],
       ),
       child: TextField(
@@ -288,15 +254,8 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
               : null,
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 15),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: const BorderSide(color: Color(0xffE5EBE8)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: const BorderSide(color: primaryColor, width: 1.4),
-          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         ),
       ),
     );
@@ -306,23 +265,22 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
     final active = selectedKelas == kelas;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
+      child: InkWell(
         onTap: () => setState(() => selectedKelas = kelas),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
           decoration: BoxDecoration(
             color: active ? primaryColor : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? primaryColor : const Color(0xffE5EBE8)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: active ? primaryColor : const Color(0xffE2ECE9)),
           ),
           child: Text(
             kelas,
             style: TextStyle(
-              decoration: TextDecoration.none,
-              color: active ? Colors.white : const Color(0xff66706D),
-              fontSize: 11.5,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              color: active ? Colors.white : const Color(0xff34403D),
+              fontSize: 12,
+              fontWeight: active ? FontWeight.bold : FontWeight.w500,
             ),
           ),
         ),
@@ -335,111 +293,82 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
     final statusColor = _getStatusColor(status);
     final statusBackground = _getStatusBackground(status);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        onTap: () => _showDetailSiswa(data),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xffEEF2F0)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withAlpha(7), blurRadius: 10, offset: const Offset(0, 4)),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(17)),
-                child: Center(
-                  child: Text(
-                    data["inisial"] ?? "S",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: () => _showDetailSiswa(data),
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(14)),
+                  child: Center(
+                    child: Text(
+                      data["inisial"] ?? "S",
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryColor),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            data["nama"] ?? "-",
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xff263330)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                          decoration: BoxDecoration(color: statusBackground, borderRadius: BorderRadius.circular(15)),
-                          child: Text(
-                            status,
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: statusColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        const Icon(Icons.badge_outlined, size: 14, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            "NIS ${data["nis"] ?? '-'}",
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11, color: Colors.grey),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.school_outlined, size: 14, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Text(
-                          data["kelas"] ?? '-',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xffF7FCFA), borderRadius: BorderRadius.circular(10)),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(Icons.description_outlined, size: 14, color: primaryColor),
-                          const SizedBox(width: 6),
-                          Text(
-                            "${data["laporan"] ?? 0} laporan",
-                            style: const TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.w600),
+                          Expanded(
+                            child: Text(
+                              data["nama"] ?? "-",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: darkPrimary),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: statusBackground, borderRadius: BorderRadius.circular(10)),
+                            child: Text(
+                              status,
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: statusColor),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        "NIS: ${data["nis"] ?? '-'} • Kelas: ${data["kelas"] ?? '-'}",
+                        style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.description_outlined, size: 13, color: primaryColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${data["laporan"] ?? 0} laporan terkait",
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: primaryColor),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              const Padding(
-                padding: EdgeInsets.only(top: 28),
-                child: Icon(Icons.chevron_right_rounded, color: Color(0xffAAB4B0), size: 23),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -465,20 +394,18 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
   }
 
   void _showDetailSiswa(Map<String, dynamic> data) {
+    final jumlahLaporan = data["laporan"] ?? 0;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        final status = data["status"] ?? "Aman";
-        final statusColor = _getStatusColor(status);
-        final statusBackground = _getStatusBackground(status);
-
         return Container(
-          padding: const EdgeInsets.fromLTRB(22, 15, 22, 30),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
           decoration: const BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(26), topRight: Radius.circular(26)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -490,16 +417,16 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
                   decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
               Row(
                 children: [
                   Container(
-                    width: 65, height: 65,
-                    decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(20)),
+                    width: 60, height: 60,
+                    decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(18)),
                     child: Center(
                       child: Text(
                         data["inisial"] ?? "S",
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor),
                       ),
                     ),
                   ),
@@ -509,65 +436,55 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(data["nama"] ?? "-", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkPrimary)),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
                         Text("${data["nis"] ?? '-'} • ${data["kelas"] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 25),
-              const Text("Informasi Siswa", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: darkPrimary)),
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
+              const Text("Informasi Detail", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: darkPrimary)),
+              const SizedBox(height: 12),
               _detailRow(icon: Icons.badge_outlined, label: "NIS", value: data["nis"] ?? '-'),
               _detailRow(icon: Icons.school_outlined, label: "Kelas", value: data["kelas"] ?? '-'),
               _detailRow(icon: Icons.email_outlined, label: "Email", value: data["email"] ?? '-'),
               _detailRow(icon: Icons.person_outline, label: "Jenis Kelamin", value: data["jenisKelamin"] ?? '-'),
+              
+              // KARTU INFORMASI JUMLAH LAPORAN DI DALAM DETAIL
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Expanded(child: Text("Status", style: TextStyle(fontSize: 12, color: Colors.grey))),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                    decoration: BoxDecoration(color: statusBackground, borderRadius: BorderRadius.circular(15)),
-                    child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 25),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: lightGreen,
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 42, height: 42,
-                      decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.description_outlined, color: primaryColor),
-                    ),
+                    const Icon(Icons.description_outlined, color: primaryColor, size: 22),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Riwayat Laporan", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xff34403D))),
-                          const SizedBox(height: 3),
-                          Text("${data["laporan"] ?? 0} laporan terkait siswa", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          const Text("Total Laporan Siswa", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                          const SizedBox(height: 2),
+                          Text("$jumlahLaporan Laporan Terkait", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkPrimary)),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                   ],
                 ),
               ),
-              const SizedBox(height: 22),
+
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity, height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor, foregroundColor: Colors.white, elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text("Tutup", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -582,11 +499,11 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
 
   Widget _detailRow({required IconData icon, required String label, required String value}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
-            width: 35, height: 35,
+            width: 36, height: 36,
             decoration: BoxDecoration(color: lightGreen, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: primaryColor, size: 18),
           ),
@@ -597,7 +514,7 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
               children: [
                 Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xff34403D))),
+                Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: darkPrimary)),
               ],
             ),
           ),
@@ -619,7 +536,7 @@ class _DataSiswaPageState extends State<DataSiswaPage> {
           const SizedBox(height: 15),
           const Text("Siswa tidak ditemukan", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: darkPrimary)),
           const SizedBox(height: 5),
-          const Text("Coba kata pencarian atau kelas lain.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const Text("Coba kata pencarian atau filter kelas lain.", style: TextStyle(fontSize: 12, color: Colors.grey)),
         ],
       ),
     );

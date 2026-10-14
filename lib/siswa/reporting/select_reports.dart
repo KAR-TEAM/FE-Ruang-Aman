@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'buat_laporan_anonim.dart';
-import 'buat_laporan_data.dart';
+import 'add_report_anon.dart';
+import 'add_report_data.dart';
 
-class PilihLaporanPage extends StatelessWidget {
-  const PilihLaporanPage({super.key});
+class SelectReportsPage extends StatelessWidget {
+  const SelectReportsPage({super.key});
 
   @override
   Widget build(BuildContext context) {

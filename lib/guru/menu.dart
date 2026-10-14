@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ruang_aman/guru/dashboard.dart';
-import 'package:ruang_aman/guru/laporan/laporanmasuk.dart';
-import 'package:ruang_aman/guru/siswa/datasiswa.dart';
+import 'package:ruang_aman/guru/reports.dart';
+import 'package:ruang_aman/guru/students.dart';
 import 'package:ruang_aman/guru/profile.dart';
 
 class MainPageguru extends StatefulWidget {
@@ -31,123 +31,69 @@ class _MainPageguruState extends State<MainPageguru> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF7F9F8),
+      backgroundColor: const Color(0xffF7FCFA),
 
       // MENAMPILKAN HALAMAN SESUAI MENU
       body: IndexedStack(index: currentIndex, children: pages),
 
-      // BOTTOM MENU
+      // BOTTOM NAVIGATION BAR (DISESUAIKAN DENGAN STANDAR SUPERADMIN)
       bottomNavigationBar: Container(
-        height: 80,
-
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(25),
-            topRight: Radius.circular(25),
-          ),
-
           boxShadow: [
             BoxShadow(
-              color: Color(0x15000000),
-              blurRadius: 15,
-              spreadRadius: 2,
-              offset: Offset(0, -4),
+              color: Colors.black.withAlpha(5),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
             ),
           ],
         ),
-
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-
-            children: [
-              navItem(
-                index: 0,
-                icon: Icons.dashboard_outlined,
-                activeIcon: Icons.dashboard,
-                label: "Dashboard",
+        child: NavigationBar(
+          height: 70,
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          indicatorColor: const Color(0xffE9F7F1), // Kapsul hijau muda aktif
+          selectedIndex: currentIndex,
+          onDestinationSelected: (index) {
+            setState(() {
+              currentIndex = index;
+            });
+          },
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.home_rounded,
+                color: Color(0xff009B88),
               ),
-
-              navItem(
-                index: 1,
-                icon: Icons.assignment_outlined,
-                activeIcon: Icons.assignment,
-                label: "Laporan",
+              label: 'Beranda',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.assignment_outlined, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.assignment_rounded,
+                color: Color(0xff009B88),
               ),
-
-              navItem(
-                index: 2,
-                icon: Icons.people_outline,
-                activeIcon: Icons.people,
-                label: "Siswa",
+              label: 'Laporan',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.people_outline, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.people_rounded,
+                color: Color(0xff009B88),
               ),
-
-              navItem(
-                index: 3,
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: "Akun",
+              label: 'Siswa',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.person_rounded,
+                color: Color(0xff009B88),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget navItem({
-    required int index,
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-  }) {
-    final bool isActive = currentIndex == index;
-
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-
-        onTap: () {
-          setState(() {
-            currentIndex = index;
-          });
-        },
-
-        child: SizedBox(
-          height: 65,
-
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-
-            children: [
-              Icon(
-                isActive ? activeIcon : icon,
-                size: 24,
-
-                color: isActive
-                    ? const Color(0xff009688)
-                    : const Color(0xffB0B5B3),
-              ),
-
-              const SizedBox(height: 5),
-
-              Text(
-                label,
-
-                style: TextStyle(
-                  fontSize: 11,
-
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-
-                  color: isActive
-                      ? const Color(0xff009688)
-                      : const Color(0xffB0B5B3),
-                ),
-              ),
-            ],
-          ),
+              label: 'Akun',
+            ),
+          ],
         ),
       ),
     );

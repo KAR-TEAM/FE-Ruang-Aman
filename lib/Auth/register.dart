@@ -78,25 +78,25 @@ class RegisterScreen extends StatelessWidget {
                     const SizedBox(height: 35),
 
                     // LOGO
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(.08),
-                              blurRadius: 15,
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          "assets/logo_ruang.jpeg",
-                          height: 70,
-                        ),
-                      ),
-                    ),
+                    // Center(
+                    //   child: Container(
+                    //     padding: const EdgeInsets.all(15),
+                    //     decoration: BoxDecoration(
+                    //       color: Colors.white,
+                    //       shape: BoxShape.circle,
+                    //       boxShadow: [
+                    //         BoxShadow(
+                    //           color: Colors.black.withOpacity(.08),
+                    //           blurRadius: 15,
+                    //         ),
+                    //       ],
+                    //     ),
+                    //     child: Image.asset(
+                    //       "assets/logo_ruang.jpeg",
+                    //       height: 70,
+                    //     ),
+                    //   ),
+                    // ),
 
                     const SizedBox(height: 30),
 

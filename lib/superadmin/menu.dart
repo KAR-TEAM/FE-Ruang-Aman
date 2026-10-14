@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'dashboard.dart';
-import 'sekolah.dart';
-import 'pengguna.dart';
-import 'profil.dart';
+import 'schools.dart';
+import 'users.dart';
+import 'profile.dart';
 
 class MenuSuperadmin extends StatefulWidget {
   const MenuSuperadmin({super.key});
@@ -41,48 +41,60 @@ class _MenuSuperadminState extends State<MenuSuperadmin> {
         children: pages,
       ),
 
-      bottomNavigationBar: NavigationBar(
-        height: 75,
-        backgroundColor: Colors.white,
-        indicatorColor: const Color(0xffE9F7F1),
-        selectedIndex: selectedIndex,
-
-        onDestinationSelected: changePage,
-
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(
-              Icons.dashboard,
-              color: Color(0xff009B88),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(5),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
             ),
-            label: 'Beranda',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(
-              Icons.school,
-              color: Color(0xff009B88),
+          ],
+        ),
+        child: NavigationBar(
+          height: 70,
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          indicatorColor: const Color(0xffE9F7F1), // Warna kapsul hijau muda aktif
+          selectedIndex: selectedIndex,
+          onDestinationSelected: changePage,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.home_rounded,
+                color: Color(0xff009B88),
+              ),
+              label: 'Beranda',
             ),
-            label: 'Sekolah',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(
-              Icons.people,
-              color: Color(0xff009B88),
+            NavigationDestination(
+              icon: Icon(Icons.school_outlined, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.school_rounded,
+                color: Color(0xff009B88),
+              ),
+              label: 'Sekolah',
             ),
-            label: 'Pengguna',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(
-              Icons.person,
-              color: Color(0xff009B88),
+            NavigationDestination(
+              icon: Icon(Icons.people_outline, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.people_rounded,
+                color: Color(0xff009B88),
+              ),
+              label: 'Pengguna',
             ),
-            label: 'Profil',
-          ),
-        ],
+            NavigationDestination(
+              icon: Icon(Icons.person_outline, color: Colors.grey),
+              selectedIcon: Icon(
+                Icons.person_rounded,
+                color: Color(0xff009B88),
+              ),
+              label: 'Profil',
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'package:ruang_aman/Auth/register.dart';
 import 'package:ruang_aman/siswa/menu.dart';
 import 'package:ruang_aman/guru/menu.dart';
 import 'package:ruang_aman/superadmin/menu.dart';
+import 'package:ruang_aman/admin/menu.dart'; // <-- IMPORT MENU ADMIN SEKOLAH
 import 'package:ruang_aman/Auth/reset_password.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -173,12 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
           (route) => false,
         );
       } else if (role == 'admin' || role == 'admin sekolah') {
-        // // NAVIGASI ADMIN SEKOLAH (Pastikan file MenuAdmin sudah di-import)
-        // Navigator.pushAndRemoveUntil(
-        //   context,
-        //   MaterialPageRoute(builder: (_) => const MenuAdminsekolah()),
-        //   (route) => false,
-        // );
+        // NAVIGASI ADMIN SEKOLAH DIAKTIFKAN
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminMenuPage()),
+          (route) => false,
+        );
       } else if (role == 'siswa') {
         Navigator.pushAndRemoveUntil(
           context,

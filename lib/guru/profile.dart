@@ -1,73 +1,342 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:ruang_aman/ipconfig.dart';
+import 'package:ruang_aman/Auth/login.dart';
 
-class ProfileGuruPage extends StatelessWidget {
+class ProfileGuruPage extends StatefulWidget {
   const ProfileGuruPage({super.key});
 
+  @override
+  State<ProfileGuruPage> createState() => _ProfileGuruPageState();
+}
+
+class _ProfileGuruPageState extends State<ProfileGuruPage> {
   static const Color primaryColor = Color(0xff009B88);
   static const Color darkPrimary = Color(0xff124F4A);
   static const Color backgroundColor = Color(0xffF7FCFA);
   static const Color lightGreen = Color(0xffE9F7F1);
 
+  static const FlutterSecureStorage storage = FlutterSecureStorage();
+
+  bool isLoading = true;
+  Map<String, dynamic> guruProfile = {};
+  String? error;
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: backgroundColor,
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
 
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 30,
-            bottom: 100,
-          ),
+  Future<void> loadProfile() async {
+    if (!mounted) return;
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
 
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 700,
+    try {
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || token.isEmpty) {
+        throw Exception('Token sesi tidak ditemukan.');
+      }
+
+      final response = await http
+          .get(
+            Uri.parse(ApiConfig.bkProfile),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            guruProfile = decoded is Map
+                ? Map<String, dynamic>.from(decoded)
+                : {};
+            isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('Gagal memuat profil');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        guruProfile = {
+          'nama': 'Guru BK',
+          'email': 'gurubk@ruangaman.com',
+          'sekolah': 'Instansi Sekolah',
+          'nip': '-',
+          'jenis_kelamin': '-',
+        };
+        isLoading = false;
+      });
+    }
+  }
+
+  // Dialog / Form Edit Profil
+  // Dialog / Form Edit Profil
+  Future<void> _showEditProfileDialog() async {
+    final namaController = TextEditingController(
+      text: guruProfile['nama'] ?? '',
+    );
+    // Email dibuat readOnly, namun tetap disertakan nilainya untuk dikirim jika diperlukan backend
+    final emailController = TextEditingController(
+      text: guruProfile['email'] ?? '',
+    );
+    final nipController = TextEditingController(
+      text: guruProfile['nip'] != '-' ? guruProfile['nip'] : '',
+    );
+    String selectedGender = guruProfile['jenis_kelamin'] ?? 'Perempuan';
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 25,
               ),
-
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-
-                children: [
-                  // =====================================================
-                  // HEADER
-                  // =====================================================
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Profil",
+              decoration: const BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 45,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Edit Profil Guru",
                       style: TextStyle(
-                        decoration: TextDecoration.none,
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: darkPrimary,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: namaController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama Lengkap',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Nama wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    // FIELD EMAIL DIKUNCI (TIDAK DAPAT DIUBAH)
+                    TextFormField(
+                      controller: emailController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: 'Email (Tidak dapat diubah)',
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: nipController,
+                      decoration: const InputDecoration(
+                        labelText: 'NIP',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: ['Laki-laki', 'Perempuan'].contains(selectedGender)
+                          ? selectedGender
+                          : 'Perempuan',
+                      decoration: const InputDecoration(
+                        labelText: 'Jenis Kelamin',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Laki-laki',
+                          child: Text('Laki-laki'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Perempuan',
+                          child: Text('Perempuan'),
+                        ),
+                      ],
+                      onChanged: (val) =>
+                          setModalState(() => selectedGender = val!),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setModalState(() => saving = true);
+
+                                try {
+                                  final token = await storage.read(
+                                    key: 'auth_token',
+                                  );
+                                  final response = await http
+                                      .put(
+                                        Uri.parse(ApiConfig.bkProfile),
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Accept': 'application/json',
+                                          'Authorization': 'Bearer $token',
+                                        },
+                                        body: jsonEncode({
+                                          'nama': namaController.text.trim(),
+                                          // Email tidak ikut diubah/dikirim ulang jika dikunci
+                                          'nip': nipController.text.trim(),
+                                          'jenis_kelamin': selectedGender,
+                                        }),
+                                      )
+                                      .timeout(const Duration(seconds: 15));
+
+                                  if (response.statusCode == 200) {
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
+                                    loadProfile();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Profil berhasil diperbarui',
+                                        ),
+                                        backgroundColor: primaryColor,
+                                      ),
+                                    );
+                                  } else {
+                                    throw Exception('Gagal memperbarui profil');
+                                  }
+                                } catch (e) {
+                                  setModalState(() => saving = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        e.toString().replaceFirst(
+                                          'Exception: ',
+                                          '',
+                                        ),
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
+                        child: saving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Simpan Perubahan',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nama = guruProfile['nama'] ?? 'Guru BK';
+    final email = guruProfile['email'] ?? 'email@sekolah.sch.id';
+    final sekolah = guruProfile['sekolah'] ?? 'Instansi Sekolah';
+    final nip = guruProfile['nip'] ?? '-';
+    final jenisKelamin = guruProfile['jenis_kelamin'] ?? '-';
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: backgroundColor,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 30, 20, 100),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Profil",
+                        style: TextStyle(
+                          decoration: TextDecoration.none,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: darkPrimary,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _showEditProfileDialog,
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: primaryColor,
+                        ),
+                        tooltip: 'Edit Profil',
+                      ),
+                    ],
                   ),
-
                   const SizedBox(height: 25),
-
-                  // =====================================================
-                  // PROFILE IMAGE
-                  // =====================================================
                   Container(
                     width: 105,
                     height: 105,
-
                     decoration: BoxDecoration(
                       color: lightGreen,
                       shape: BoxShape.circle,
-
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 4,
-                      ),
-
+                      border: Border.all(color: Colors.white, width: 4),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withAlpha(15),
@@ -76,64 +345,43 @@ class ProfileGuruPage extends StatelessWidget {
                         ),
                       ],
                     ),
-
                     child: const Icon(
                       Icons.person,
                       size: 62,
                       color: primaryColor,
                     ),
                   ),
-
                   const SizedBox(height: 15),
-
-                  // =====================================================
-                  // NAMA
-                  // =====================================================
-                  const Text(
-                    "Ibu Rina Kartika",
+                  Text(
+                    nama,
                     textAlign: TextAlign.center,
-
-                    style: TextStyle(
+                    style: const TextStyle(
                       decoration: TextDecoration.none,
                       fontSize: 21,
                       fontWeight: FontWeight.bold,
                       color: Color(0xff263330),
                     ),
                   ),
-
                   const SizedBox(height: 5),
-
-                  // =====================================================
-                  // ROLE
-                  // =====================================================
                   const Text(
                     "Guru Bimbingan & Konseling",
-
                     textAlign: TextAlign.center,
-
                     style: TextStyle(
                       decoration: TextDecoration.none,
                       fontSize: 13,
                       color: Colors.grey,
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // =====================================================
-                  // BADGE GURU
-                  // =====================================================
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 13,
                       vertical: 7,
                     ),
-
                     decoration: BoxDecoration(
                       color: lightGreen,
                       borderRadius: BorderRadius.circular(20),
                     ),
-
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -142,12 +390,9 @@ class ProfileGuruPage extends StatelessWidget {
                           size: 15,
                           color: primaryColor,
                         ),
-
                         SizedBox(width: 6),
-
                         Text(
                           "Guru BK",
-
                           style: TextStyle(
                             decoration: TextDecoration.none,
                             color: primaryColor,
@@ -158,17 +403,11 @@ class ProfileGuruPage extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
-                  // =====================================================
-                  // INFORMASI AKUN
-                  // =====================================================
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       "Informasi Akun",
-
                       style: TextStyle(
                         decoration: TextDecoration.none,
                         fontSize: 15,
@@ -177,141 +416,76 @@ class ProfileGuruPage extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   profileCard(
                     icon: Icons.person_outline,
                     title: "Data Pribadi",
-                    subtitle: "Lihat dan ubah informasi diri",
-
-                    onTap: () {
-                      _showDataPribadi(context);
-                    },
+                    subtitle: email,
+                    onTap: () => _showDetailSheet(
+                      context,
+                      title: "Data Pribadi",
+                      icon: Icons.person_outline,
+                      children: [
+                        DetailItem(label: "Nama", value: nama),
+                        DetailItem(label: "Email", value: email),
+                        DetailItem(label: "Jenis Kelamin", value: jenisKelamin),
+                      ],
+                    ),
                   ),
-
                   profileCard(
                     icon: Icons.school_outlined,
                     title: "Informasi Sekolah",
-                    subtitle: "SMAN 1 Contoh",
-
-                    onTap: () {
-                      _showInformasiSekolah(context);
-                    },
+                    subtitle: sekolah,
+                    onTap: () => _showDetailSheet(
+                      context,
+                      title: "Informasi Sekolah",
+                      icon: Icons.school_outlined,
+                      children: [
+                        DetailItem(label: "Sekolah", value: sekolah),
+                        const DetailItem(
+                          label: "Jabatan",
+                          value: "Guru Bimbingan & Konseling",
+                        ),
+                      ],
+                    ),
                   ),
-
                   profileCard(
                     icon: Icons.badge_outlined,
                     title: "Informasi Kepegawaian",
-                    subtitle: "NIP dan data Guru BK",
-
-                    onTap: () {
-                      _showKepegawaian(context);
-                    },
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  // =====================================================
-                  // PENGATURAN
-                  // =====================================================
-                  const Align(
-                    alignment: Alignment.centerLeft,
-
-                    child: Text(
-                      "Pengaturan",
-
-                      style: TextStyle(
-                        decoration: TextDecoration.none,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xff263330),
-                      ),
+                    subtitle: "NIP: $nip",
+                    onTap: () => _showDetailSheet(
+                      context,
+                      title: "Informasi Kepegawaian",
+                      icon: Icons.badge_outlined,
+                      children: [
+                        DetailItem(label: "NIP", value: nip),
+                        const DetailItem(label: "Status", value: "Guru Tetap"),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 12),
-
-                  profileCard(
-                    icon: Icons.lock_outline,
-                    title: "Ubah Password",
-                    subtitle: "Ganti password akun",
-
-                    onTap: () {
-                      _showSimpleMessage(
-                        context,
-                        "Ubah Password",
-                        "Fitur ubah password belum tersedia.",
-                      );
-                    },
-                  ),
-
-                  profileCard(
-                    icon: Icons.notifications_none,
-                    title: "Notifikasi",
-                    subtitle: "Atur pemberitahuan laporan",
-
-                    onTap: () {
-                      _showSimpleMessage(
-                        context,
-                        "Notifikasi",
-                        "Pengaturan notifikasi akan tersedia di sini.",
-                      );
-                    },
-                  ),
-
-                  profileCard(
-                    icon: Icons.help_outline,
-                    title: "Bantuan",
-                    subtitle: "Pusat bantuan RuangAman",
-
-                    onTap: () {
-                      _showSimpleMessage(
-                        context,
-                        "Bantuan",
-                        "Silakan hubungi administrator jika mengalami kendala.",
-                      );
-                    },
-                  ),
-
                   const SizedBox(height: 20),
-
-                  // =====================================================
-                  // LOGOUT
-                  // =====================================================
                   Material(
                     color: Colors.transparent,
-
                     child: InkWell(
                       borderRadius: BorderRadius.circular(25),
-
-                      onTap: () {
-                        _showLogoutDialog(context);
-                      },
-
+                      onTap: () => _showLogoutDialog(context),
                       child: Container(
                         width: double.infinity,
                         height: 50,
-
                         decoration: BoxDecoration(
                           color: const Color(0xffFDEDED),
                           borderRadius: BorderRadius.circular(25),
                         ),
-
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-
                           children: [
                             Icon(
                               Icons.logout_rounded,
                               color: Color(0xffEF4444),
                             ),
-
                             SizedBox(width: 8),
-
                             Text(
                               "Keluar",
-
                               style: TextStyle(
                                 decoration: TextDecoration.none,
                                 color: Color(0xffEF4444),
@@ -323,21 +497,6 @@ class ProfileGuruPage extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 25),
-
-                  // =====================================================
-                  // VERSION
-                  // =====================================================
-                  const Text(
-                    "RuangAman v1.0.0",
-
-                    style: TextStyle(
-                      decoration: TextDecoration.none,
-                      fontSize: 10,
-                      color: Colors.grey,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -347,9 +506,6 @@ class ProfileGuruPage extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // PROFILE CARD
-  // ============================================================
   Widget profileCard({
     required IconData icon,
     required String title,
@@ -357,19 +513,11 @@ class ProfileGuruPage extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 12,
-      ),
-
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-
         borderRadius: BorderRadius.circular(18),
-
-        border: Border.all(
-          color: const Color(0xffEEF2F0),
-        ),
-
+        border: Border.all(color: const Color(0xffEEF2F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(8),
@@ -378,45 +526,31 @@ class ProfileGuruPage extends StatelessWidget {
           ),
         ],
       ),
-
       child: Material(
         color: Colors.transparent,
-
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: onTap,
-
           child: Padding(
             padding: const EdgeInsets.all(16),
-
             child: Row(
               children: [
                 Container(
                   width: 45,
                   height: 45,
-
                   decoration: BoxDecoration(
                     color: lightGreen,
                     borderRadius: BorderRadius.circular(14),
                   ),
-
-                  child: Icon(
-                    icon,
-                    color: primaryColor,
-                    size: 22,
-                  ),
+                  child: Icon(icon, color: primaryColor, size: 22),
                 ),
-
                 const SizedBox(width: 15),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
                       Text(
                         title,
-
                         style: const TextStyle(
                           decoration: TextDecoration.none,
                           fontSize: 14,
@@ -424,15 +558,11 @@ class ProfileGuruPage extends StatelessWidget {
                           color: Color(0xff34403D),
                         ),
                       ),
-
                       const SizedBox(height: 4),
-
                       Text(
                         subtitle,
-
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-
                         style: const TextStyle(
                           decoration: TextDecoration.none,
                           fontSize: 11,
@@ -442,9 +572,6 @@ class ProfileGuruPage extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                const SizedBox(width: 8),
-
                 const Icon(
                   Icons.chevron_right_rounded,
                   size: 22,
@@ -458,100 +585,6 @@ class ProfileGuruPage extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // DATA PRIBADI
-  // ============================================================
-  void _showDataPribadi(BuildContext context) {
-    _showDetailSheet(
-      context,
-      title: "Data Pribadi",
-      icon: Icons.person_outline,
-      children: const [
-        DetailItem(
-          label: "Nama",
-          value: "Rina Kartika, S.Pd.",
-        ),
-
-        DetailItem(
-          label: "Email",
-          value: "guru@gmail.com",
-        ),
-
-        DetailItem(
-          label: "No. Telepon",
-          value: "0812-3456-7890",
-        ),
-
-        DetailItem(
-          label: "Jenis Kelamin",
-          value: "Perempuan",
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // SEKOLAH
-  // ============================================================
-  void _showInformasiSekolah(BuildContext context) {
-    _showDetailSheet(
-      context,
-      title: "Informasi Sekolah",
-      icon: Icons.school_outlined,
-      children: const [
-        DetailItem(
-          label: "Sekolah",
-          value: "SMAN 1 Contoh",
-        ),
-
-        DetailItem(
-          label: "Jabatan",
-          value: "Guru Bimbingan & Konseling",
-        ),
-
-        DetailItem(
-          label: "Unit",
-          value: "Bimbingan dan Konseling",
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // KEPEGAWAIAN
-  // ============================================================
-  void _showKepegawaian(BuildContext context) {
-    _showDetailSheet(
-      context,
-      title: "Informasi Kepegawaian",
-      icon: Icons.badge_outlined,
-      children: const [
-        DetailItem(
-          label: "NIP",
-          value: "19870612 201501 2 001",
-        ),
-
-        DetailItem(
-          label: "Status",
-          value: "Guru Tetap",
-        ),
-
-        DetailItem(
-          label: "Jabatan",
-          value: "Guru BK",
-        ),
-
-        DetailItem(
-          label: "Masa Kerja",
-          value: "11 Tahun",
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // DETAIL BOTTOM SHEET
-  // ============================================================
   void _showDetailSheet(
     BuildContext context, {
     required String title,
@@ -562,192 +595,94 @@ class ProfileGuruPage extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-
       builder: (context) {
         return Container(
-          padding: const EdgeInsets.fromLTRB(
-            22,
-            15,
-            22,
-            30,
-          ),
-
+          padding: const EdgeInsets.fromLTRB(22, 15, 22, 30),
           decoration: const BoxDecoration(
             color: backgroundColor,
-
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(26),
-              topRight: Radius.circular(26),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
           ),
-
-          child: SafeArea(
-            top: false,
-
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-
-              children: [
-                Center(
-                  child: Container(
-                    width: 45,
-                    height: 5,
-
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 45,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-
-                const SizedBox(height: 22),
-
-                Row(
-                  children: [
-                    Container(
-                      width: 45,
-                      height: 45,
-
-                      decoration: BoxDecoration(
-                        color: lightGreen,
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-
-                      child: Icon(
-                        icon,
-                        color: primaryColor,
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: Text(
-                        title,
-
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: darkPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 22),
-
-                ...children,
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // SIMPLE MESSAGE
-  // ============================================================
-  void _showSimpleMessage(
-    BuildContext context,
-    String title,
-    String message,
-  ) {
-    showDialog(
-      context: context,
-
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
-              child: const Text(
-                "OK",
-                style: TextStyle(
-                  color: primaryColor,
-                  fontWeight: FontWeight.bold,
-                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Container(
+                    width: 45,
+                    height: 45,
+                    decoration: BoxDecoration(
+                      color: lightGreen,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(icon, color: primaryColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: darkPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              ...children,
+            ],
+          ),
         );
       },
     );
   }
 
-  // ============================================================
-  // LOGOUT
-  // ============================================================
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-
           title: const Text(
             "Keluar dari akun?",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-
-          content: const Text(
-            "Anda akan keluar dari akun Guru BK.",
-          ),
-
+          content: const Text("Anda akan keluar dari akun Guru BK."),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
-              child: const Text(
-                "Batal",
-                style: TextStyle(
-                  color: Colors.grey,
-                ),
-              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
             ),
-
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xffEF4444),
                 foregroundColor: Colors.white,
                 elevation: 0,
               ),
-
-              onPressed: () {
+              onPressed: () async {
+                await storage.delete(key: 'auth_token');
+                if (!context.mounted) return;
                 Navigator.pop(context);
-
-                // NANTI ARAHKAN KE LOGIN
-                // Navigator.pushAndRemoveUntil(
-                //   context,
-                //   MaterialPageRoute(
-                //     builder: (_) => const LoginScreen(),
-                //   ),
-                //   (route) => false,
-                // );
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
               },
-
-              child: const Text(
-                "Keluar",
-              ),
+              child: const Text("Keluar"),
             ),
           ],
         );
@@ -756,53 +691,28 @@ class ProfileGuruPage extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// DETAIL ITEM
-// ============================================================================
 class DetailItem extends StatelessWidget {
   final String label;
   final String value;
-
-  const DetailItem({
-    super.key,
-    required this.label,
-    required this.value,
-  });
+  const DetailItem({super.key, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-
-      margin: const EdgeInsets.only(
-        bottom: 10,
-      ),
-
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
-          Text(
-            label,
-
-            style: const TextStyle(
-              fontSize: 10,
-              color: Colors.grey,
-            ),
-          ),
-
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
           const SizedBox(height: 4),
-
           Text(
             value,
-
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,

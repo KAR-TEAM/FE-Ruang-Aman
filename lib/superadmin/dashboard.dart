@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:async';
 
@@ -7,19 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:ruang_aman/ipconfig.dart';
-import 'package:ruang_aman/superadmin/admin_sekolah.dart';
 
 class DashboardSuperadmin extends StatefulWidget {
   final ValueChanged<int> onNavigate;
 
-  const DashboardSuperadmin({
-    super.key,
-    required this.onNavigate,
-  });
+  const DashboardSuperadmin({super.key, required this.onNavigate});
 
   @override
-  State<DashboardSuperadmin> createState() =>
-      _DashboardSuperadminState();
+  State<DashboardSuperadmin> createState() => _DashboardSuperadminState();
 }
 
 class _DashboardSuperadminState extends State<DashboardSuperadmin> {
@@ -32,8 +26,7 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
   static const Color backgroundColor = Color(0xffF7FCFA);
   static const Color lightGreen = Color(0xffE9F7F1);
 
-  static const FlutterSecureStorage storage =
-      FlutterSecureStorage();
+  static const FlutterSecureStorage storage = FlutterSecureStorage();
 
   // ============================================================
   // STATE
@@ -43,6 +36,7 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
   String? error;
 
   Map<String, dynamic> stats = {};
+  List<Map<String, dynamic>> recentSchools = [];
 
   // ============================================================
   // INIT
@@ -51,15 +45,14 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
   @override
   void initState() {
     super.initState();
-    loadStats();
+    loadDashboardData();
   }
 
   // ============================================================
-  // AMBIL STATISTIK SUPERADMIN
-  // GET /api/superadmin/schools-stats
+  // AMBIL DATA DASHBOARD (STATISTIK & SEKOLAH TERBARU)
   // ============================================================
 
-  Future<void> loadStats() async {
+  Future<void> loadDashboardData() async {
     if (!mounted) return;
 
     setState(() {
@@ -68,23 +61,16 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
     });
 
     try {
-      // AMBIL TOKEN LOGIN
-      final token = await storage.read(
-        key: 'auth_token',
-      );
+      final token = await storage.read(key: 'auth_token');
 
       if (token == null || token.isEmpty) {
-        throw Exception(
-          'Token tidak ditemukan. Silakan login kembali.',
-        );
+        throw Exception('Token tidak ditemukan. Silakan login kembali.');
       }
 
-      // REQUEST API
-      final response = await http
+      // 1. Ambil Statistik
+      final statsResponse = await http
           .get(
-            Uri.parse(
-              '${ApiConfig.baseUrl}/api/superadmin/schools-stats',
-            ),
+            Uri.parse('${ApiConfig.baseUrl}/api/superadmin/schools-stats'),
             headers: {
               'Accept': 'application/json',
               'Authorization': 'Bearer $token',
@@ -92,82 +78,52 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
           )
           .timeout(const Duration(seconds: 20));
 
-      // PARSING JSON
-      final dynamic result;
-
-      try {
-        result = jsonDecode(response.body);
-      } catch (_) {
-        throw Exception(
-          'Respons backend bukan JSON yang valid',
-        );
+      final statsResult = jsonDecode(statsResponse.body);
+      if (statsResponse.statusCode != 200) {
+        throw Exception(statsResult['message'] ?? 'Gagal mengambil statistik');
       }
 
-      // VALIDASI RESPONSE
-      if (response.statusCode == 401) {
-        throw Exception(
-          'Sesi login tidak valid atau sudah kedaluwarsa.',
-        );
-      }
+      // 2. Ambil Daftar Sekolah Terbaru (Limit 3)
+      final schoolsResponse = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/superadmin/search'),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
 
-      if (response.statusCode == 403) {
-        throw Exception(
-          'Akses ditolak. Akun harus memiliki role Superadmin.',
-        );
-      }
-
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
-        final message = result is Map
-            ? result['message']?.toString()
-            : null;
-
-        throw Exception(
-          message ??
-              'Gagal mengambil statistik (${response.statusCode})',
-        );
-      }
-
-      if (result is Map && result['success'] == false) {
-        throw Exception(
-          result['message']?.toString() ??
-              'Gagal mengambil statistik',
-        );
-      }
-
-      // AMBIL DATA
-      dynamic data = result;
-
-      if (result is Map && result.containsKey('data')) {
-        data = result['data'];
-      }
-
-      if (data is! Map) {
-        throw Exception(
-          'Format data statistik tidak sesuai',
-        );
+      final schoolsResult = jsonDecode(schoolsResponse.body);
+      List<Map<String, dynamic>> schoolList = [];
+      if (schoolsResponse.statusCode == 200) {
+        dynamic data = schoolsResult;
+        if (data is Map && data.containsKey('data')) data = data['data'];
+        if (data is Map) data = data['schools'] ?? data['sekolah'] ?? [];
+        if (data is List) {
+          schoolList = data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
       }
 
       if (!mounted) return;
 
       setState(() {
-        stats = Map<String, dynamic>.from(data);
+        stats = Map<String, dynamic>.from(statsResult['data'] ?? statsResult);
+        recentSchools = schoolList.take(3).toList();
       });
-
     } on TimeoutException {
       if (!mounted) return;
-
       setState(() {
         error = 'Koneksi timeout. Periksa server backend.';
       });
-
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         error = e.toString().replaceFirst('Exception: ', '');
       });
-
     } finally {
       if (mounted) {
         setState(() {
@@ -177,133 +133,107 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
     }
   }
 
-  // ============================================================
-  // AMBIL NILAI STATISTIK
-  // ============================================================
-
   String value(List<String> keys) {
     for (final key in keys) {
       final data = stats[key];
-
-      if (data != null) {
-        return data.toString();
-      }
+      if (data != null) return data.toString();
     }
-
-    // Jika key API belum sesuai
-    return '—';
+    return '0';
   }
 
   // ============================================================
-  // HEADER DASHBOARD
+  // HEADER & BANNER SAMBUTAN (SESUAI GAMBAR)
   // ============================================================
 
-  Widget buildHeader() {
-    return Row(
+  Widget buildWelcomeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Dashboard',
-                style: TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.bold,
-                  color: darkPrimary,
-                ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Halo, Superadmin!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: darkPrimary,
               ),
-              SizedBox(height: 5),
-              Text(
-                'Pantau seluruh sistem RuangAman',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Container(
-          width: 45,
-          height: 45,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(10),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: IconButton(
-            tooltip: 'Refresh statistik',
-            onPressed: loading ? null : loadStats,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: primaryColor,
             ),
+            IconButton(
+              onPressed: loadDashboardData,
+              icon: const Icon(Icons.notifications_none_rounded, color: darkPrimary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Kelola data sekolah dan pengguna\npada platform RuangAman.',
+          style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.4),
+        ),
+        const SizedBox(height: 18),
+        // Banner Ilustrasi / Info Card Hijau
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: lightGreen,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RuangAman',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: darkPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Mendukung lingkungan\nsekolah yang aman,\nnyaman, dan terpercaya.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xff34403D),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Icon Ilustrasi Sekolah
+              Container(
+                width: 75,
+                height: 75,
+                decoration: BoxDecoration(
+                  color: primaryColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.school_rounded,
+                  size: 40,
+                  color: primaryColor,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  // // ============================================================
-  // // WELCOME CARD
-  // // ============================================================
-
-  // Widget buildWelcomeCard() {
-  //   return Container(
-  //     width: double.infinity,
-  //     padding: const EdgeInsets.all(18),
-  //     decoration: BoxDecoration(
-  //       color: lightGreen,
-  //       borderRadius: BorderRadius.circular(20),
-  //     ),
-  //     child: const Row(
-  //       children: [
-  //         Expanded(
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.start,
-  //             children: [
-  //               Text(
-  //                 'Selamat datang, Superadmin 👋',
-  //                 style: TextStyle(
-  //                   fontSize: 18,
-  //                   fontWeight: FontWeight.bold,
-  //                   color: darkPrimary,
-  //                 ),
-  //               ),
-  //               SizedBox(height: 8),
-  //               Text(
-  //                 'Pantau perkembangan sistem, kelola sekolah, '
-  //                 'dan atur pengguna dalam satu aplikasi.',
-  //                 style: TextStyle(
-  //                   fontSize: 12,
-  //                   color: Color(0xff55736D),
-  //                   height: 1.5,
-  //                 ),
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //         SizedBox(width: 12),
-  //         Icon(
-  //           Icons.admin_panel_settings_outlined,
-  //           size: 48,
-  //           color: primaryColor,
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
+  // ============================================================
+  // STATISTIK CARD (2 x 2 GRID)
+  // ============================================================
 
   // ============================================================
-  // CARD STATISTIK
+  // STATISTIK CARD (DIPERBAIKI AGAR TIDAK OVERFLOW)
   // ============================================================
 
   Widget statisticCard({
@@ -312,16 +242,16 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
     required String subtitle,
     required IconData icon,
     required Color iconColor,
-    required Color iconBackground,
+    required Color iconBg,
   }) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(10),
+            color: Colors.black.withAlpha(6),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -329,49 +259,45 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, // Mengatur jarak merata secara vertikal
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconBackground,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              size: 21,
-              color: iconColor,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: iconColor),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              count,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: darkPrimary,
+              ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            count,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 25,
-              fontWeight: FontWeight.bold,
-              color: Color(0xff1E2926),
-            ),
-          ),
-
-          const SizedBox(height: 6),
-
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xff34403D),
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
           Text(
             subtitle,
             maxLines: 1,
@@ -387,145 +313,164 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
   }
 
   // ============================================================
-  // GRID STATISTIK RESPONSIVE
+  // GRID STATISTIK 2x2
   // ============================================================
 
   Widget buildStatisticGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        int columns;
-
-        if (constraints.maxWidth >= 900) {
-          columns = 4;
-        } else if (constraints.maxWidth >= 320) {
-          columns = 2;
-        } else {
-          columns = 1;
-        }
-
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          mainAxisExtent: 165,
-          children: [
-            statisticCard(
-              title: 'Total Sekolah',
-              count: value([
-                'total_sekolah',
-                'totalSchools',
-                'total_schools',
-              ]),
-              subtitle: 'Sekolah terdaftar',
-              icon: Icons.school_outlined,
-              iconColor: primaryColor,
-              iconBackground: lightGreen,
-            ),
-
-            statisticCard(
-              title: 'Total Siswa',
-              count: value([
-                'total_siswa',
-                'totalStudents',
-                'total_students',
-              ]),
-              subtitle: 'Akun siswa aktif',
-              icon: Icons.people_outline,
-              iconColor: const Color(0xff3B82F6),
-              iconBackground: const Color(0xffE8F1FF),
-            ),
-
-            statisticCard(
-              title: 'Total Guru BK',
-              count: value([
-                'total_guru_bk',
-                'totalTeachers',
-                'total_guru',
-              ]),
-              subtitle: 'Guru konseling',
-              icon: Icons.support_agent_outlined,
-              iconColor: const Color(0xffF59E0B),
-              iconBackground: const Color(0xffFFF4E1),
-            ),
-
-            statisticCard(
-              title: 'Admin Sekolah',
-              count: value([
-                'total_admin',
-                'total_admins',
-                'totalAdmins',
-              ]),
-              subtitle: 'Akun pengelola',
-              icon: Icons.admin_panel_settings_outlined,
-              iconColor: const Color(0xff8B5CF6),
-              iconBackground: const Color(0xffF1EBFF),
-            ),
-          ],
-        );
-      },
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      mainAxisExtent: 122, // Dinaikkan sedikit dari 115 ke 122 agar sangat pas
+      children: [
+        statisticCard(
+          title: 'Total Sekolah',
+          count: value(['total_sekolah', 'totalSchools', 'total_schools']),
+          subtitle: 'Sekolah terdaftar',
+          icon: Icons.school_outlined,
+          iconColor: primaryColor,
+          iconBg: lightGreen,
+        ),
+        statisticCard(
+          title: 'Total Pengguna',
+          count: value(['total_users', 'totalUsers']),
+          subtitle: 'Semua akun aktif',
+          icon: Icons.people_outline,
+          iconColor: const Color(0xff3B82F6),
+          iconBg: const Color(0xffE8F1FF),
+        ),
+        statisticCard(
+          title: 'Total Siswa',
+          count: value(['total_siswa', 'totalStudents', 'total_students']),
+          subtitle: 'Akun siswa aktif',
+          icon: Icons.person_outline,
+          iconColor: const Color(0xff10B981),
+          iconBg: const Color(0xffE6F7F2),
+        ),
+        statisticCard(
+          title: 'Total Guru BK',
+          count: value(['total_guru_bk', 'totalTeachers', 'total_guru']),
+          subtitle: 'Guru konseling',
+          icon: Icons.support_agent_outlined,
+          iconColor: const Color(0xffF59E0B),
+          iconBg: const Color(0xffFFF4E1),
+        ),
+      ],
     );
   }
-
+  
   // ============================================================
-  // CARD MENU
+  // DAFTAR SEKOLAH TERBARU SECTION
   // ============================================================
 
-  Widget menuCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        onTap: onTap,
-        leading: Container(
-          width: 47,
-          height: 47,
-          decoration: BoxDecoration(
-            color: lightGreen,
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: Icon(
-            icon,
-            color: primaryColor,
-          ),
+  Widget buildRecentSchoolsSection() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Daftar Sekolah Terbaru',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: darkPrimary,
+              ),
+            ),
+            TextButton(
+              onPressed: () => widget.onNavigate(1), // Navigasi ke Tab Sekolah (Index 1)
+              child: const Text(
+                'Lihat Semua',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: primaryColor,
+                ),
+              ),
+            ),
+          ],
         ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: darkPrimary,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 11,
-            color: Colors.grey,
-          ),
-        ),
-        trailing: const Icon(
-          Icons.chevron_right,
-          color: primaryColor,
-        ),
-      ),
+        const SizedBox(height: 8),
+        if (recentSchools.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Text('Belum ada data sekolah', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          )
+        else
+          ...recentSchools.map((school) {
+            final nama = '${school['nama_sekolah'] ?? school['nama'] ?? 'Sekolah'}';
+            final alamat = '${school['alamat'] ?? '-'}';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: lightGreen,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.school_outlined, color: primaryColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nama,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: darkPrimary,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                alamat,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                ],
+              ),
+            );
+          }),
+      ],
     );
   }
 
@@ -542,72 +487,43 @@ class _DashboardSuperadminState extends State<DashboardSuperadmin> {
       child: SafeArea(
         child: RefreshIndicator(
           color: primaryColor,
-          onRefresh: loadStats,
+          onRefresh: loadDashboardData,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              20, 25, 20, 30,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
             children: [
-              // HEADER
-              buildHeader(),
+              // BANNER SAMBUTAN
+              buildWelcomeSection(),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 22),
 
-              // WELCOME
-              // buildWelcomeCard(),
-
-              // const SizedBox(height: 28),
-
-              const SizedBox(height: 15),
-
-              // LOADING
+              // LOADING / ERROR HANDLE
               if (loading)
                 const Padding(
                   padding: EdgeInsets.all(30),
                   child: Center(
-                    child: CircularProgressIndicator(
-                      color: primaryColor,
-                    ),
+                    child: CircularProgressIndicator(color: primaryColor),
                   ),
-                ),
-
-              // ERROR
-              if (error != null)
-                Container(
-                  margin: const EdgeInsets.only(
-                    bottom: 15,
-                  ),
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: const Color(0xffFDECEC),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Colors.red,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          error!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // STATISTIK
-              if (!loading)
+                )
+              else ...[
+                // STATISTIK GRID 2x2
                 buildStatisticGrid(),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 24),
+
+                // DAFTAR SEKOLAH TERBARU
+                buildRecentSchoolsSection(),
+              ],
+
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 15),
+                  child: Text(
+                    error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             ],
           ),
         ),
