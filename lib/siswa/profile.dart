@@ -505,7 +505,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   profileCard(
                     icon: Icons.school_outlined,
                     title: "Kelas & Jurusan",
-                    subtitle: "$kelas ($jurusan)",
+                    subtitle: "$kelas",
                   ),
                   profileCard(
                     icon: Icons.calendar_today_outlined,

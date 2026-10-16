@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = 'http://localhost:5000';
+  static const String baseUrl = 'https://api.ruangaman.online';
 
   //Auth
   static const String register = '$baseUrl/api/auth/register';

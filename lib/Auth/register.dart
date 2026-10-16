@@ -40,127 +40,97 @@ class RegisterScreen extends StatelessWidget {
 
           SafeArea(
             child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight:
-                      MediaQuery.sizeOf(context).height -
-                      MediaQuery.paddingOf(context).top -
-                      MediaQuery.paddingOf(context).bottom -
-                      30,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // BACK BUTTON
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.08),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(
-                          Icons.arrow_back,
-                          color: Color(0xff087F72),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // BACK BUTTON
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.08),
+                          blurRadius: 10,
                         ),
+                      ],
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 18,
+                        color: Color(0xff087F72),
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 35),
+                  const SizedBox(height: 30),
 
-                    // LOGO
-                    // Center(
-                    //   child: Container(
-                    //     padding: const EdgeInsets.all(15),
-                    //     decoration: BoxDecoration(
-                    //       color: Colors.white,
-                    //       shape: BoxShape.circle,
-                    //       boxShadow: [
-                    //         BoxShadow(
-                    //           color: Colors.black.withOpacity(.08),
-                    //           blurRadius: 15,
-                    //         ),
-                    //       ],
-                    //     ),
-                    //     child: Image.asset(
-                    //       "assets/logo_ruang.jpeg",
-                    //       height: 70,
-                    //     ),
-                    //   ),
-                    // ),
+                  // TITLE
+                  const Text(
+                    "Buat Akun\nRuangAman",
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff124F4A),
+                      height: 1.2,
+                    ),
+                  ),
 
-                    const SizedBox(height: 30),
+                  const SizedBox(height: 10),
 
-                    // TITLE
-                    const Text(
-                      "Buat Akun\nRuangAman",
+                  const Text(
+                    "Pilih peran kamu untuk mendapatkan pengalaman terbaik",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+
+                  const SizedBox(height: 35),
+
+                  // PILIH SISWA
+                  roleCard(
+                    context,
+                    title: "Saya Siswa",
+                    desc: "Cari bantuan dan terhubung dengan Guru BK",
+                    icon: Icons.school_rounded,
+                    color: const Color(0xff087F72),
+                    page: const RegisterSiswa(),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // PILIH GURU BK
+                  roleCard(
+                    context,
+                    title: "Saya Guru BK",
+                    desc: "Dampingi siswa melalui layanan konseling",
+                    icon: Icons.support_agent_rounded,
+                    color: const Color(0xff42B883),
+                    page: const RegisterGuru(),
+                  ),
+
+                  const SizedBox(height: 60),
+
+                  Center(
+                    child: Text(
+                      "Aman bercerita • Nyaman berkembang",
                       style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xff124F4A),
-                        height: 1.2,
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 10),
-
-                    const Text(
-                      "Pilih peran kamu untuk mendapatkan pengalaman terbaik",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-
-                    const SizedBox(height: 35),
-
-                    // PILIH SISWA
-                    roleCard(
-                      context,
-                      title: "Saya Siswa",
-                      desc: "Cari bantuan dan terhubung dengan Guru BK",
-                      icon: Icons.school_rounded,
-                      color: const Color(0xff087F72),
-                      page: const RegisterSiswa(),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // PILIH GURU BK
-                    roleCard(
-                      context,
-                      title: "Saya Guru BK",
-                      desc: "Dampingi siswa melalui layanan konseling",
-                      icon: Icons.support_agent_rounded,
-                      color: const Color(0xff42B883),
-                      page: const RegisterGuru(),
-                    ),
-
-                    const SizedBox(height: 55),
-
-                    Center(
-                      child: Text(
-                        "Aman bercerita • Nyaman berkembang",
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-                  ],
-                ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),
@@ -187,12 +157,7 @@ class RegisterScreen extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            PageRouteBuilder(
-              pageBuilder: (_, __, ___) => page,
-              transitionsBuilder: (_, animation, __, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-            ),
+            MaterialPageRoute(builder: (_) => page),
           );
         },
         child: Container(

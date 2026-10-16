@@ -14,7 +14,6 @@ class RegisterSiswa extends StatefulWidget {
 }
 
 class _RegisterSiswaState extends State<RegisterSiswa> {
-  // CONTROLLER
   final namaController = TextEditingController();
   final nisController = TextEditingController();
   final kelasController = TextEditingController();
@@ -22,7 +21,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
   final passwordController = TextEditingController();
   final schoolSearchController = TextEditingController();
 
-  // STATE
   String? selectedSchoolId;
   String? selectedSchoolName;
   String selectedJenisKelamin = 'Laki-laki';
@@ -44,20 +42,20 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
     super.dispose();
   }
 
-  // MESSAGE
   void showMessage(String message, {bool success = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: success ? const Color(0xff087F72) : Colors.red,
+        backgroundColor: success ? const Color(0xff087F72) : Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(15),
       ),
     );
   }
 
-  // PENCARIAN SEKOLAH (FITUR SEARCH)
   Future<void> fetchSchools({String query = ''}) async {
     if (query.trim().isEmpty) {
       setState(() {
@@ -69,10 +67,12 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
     setState(() => isSearchingSchool = true);
     try {
-      final url = Uri.parse('${ApiConfig.baseUrl}/api/auth/search?query=${Uri.encodeComponent(query)}');
-      final response = await http.get(url, headers: {
-        'Accept': 'application/json',
-      }).timeout(const Duration(seconds: 30));
+      final url = Uri.parse(
+        '${ApiConfig.baseUrl}/api/auth/search?query=${Uri.encodeComponent(query)}',
+      );
+      final response = await http
+          .get(url, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -97,7 +97,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
     }
   }
 
-  // REGISTER KE API
   Future<void> register() async {
     if (isLoading) return;
 
@@ -114,19 +113,26 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
         password.isEmpty ||
         selectedSchoolId == null ||
         selectedSchoolId!.isEmpty) {
-      showMessage("Semua data termasuk sekolah wajib diisi");
+      showMessage("Mohon lengkapi semua data diri dan pilih sekolahmu.");
       return;
     }
 
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
     if (!emailRegex.hasMatch(email)) {
-      showMessage("Format email tidak valid");
+      showMessage("Format alamat email belum valid.");
       return;
     }
 
+    // if (!email.endsWith('.sch.id')) {
+    //   showMessage(
+    //     "Pendaftaran wajib menggunakan email sekolah yang berakhiran .sch.id",
+    //   );
+    //   return;
+    // }
+
     if (password.length < 6) {
-      showMessage("Password minimal 6 karakter");
+      showMessage("Kata sandi minimal harus 6 karakter.");
       return;
     }
 
@@ -160,9 +166,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
         if (decoded is Map<String, dynamic>) {
           data = decoded;
         }
-      } catch (_) {
-        // Respons server tidak berupa JSON.
-      }
+      } catch (_) {}
 
       if (!mounted) return;
 
@@ -173,7 +177,8 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
 
       if (berhasil) {
         showMessage(
-          data['message']?.toString() ?? 'Registrasi siswa berhasil',
+          data['message']?.toString() ??
+              'Pendaftaran siswa berhasil! Silakan verifikasi email.',
           success: true,
         );
 
@@ -183,14 +188,12 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
         );
       } else {
         showMessage(
-          data['message']?.toString() ??
-              'Registrasi gagal (${response.statusCode})',
+          data['message']?.toString() ?? 'Pendaftaran gagal dilakukan.',
         );
       }
     } catch (e) {
       if (!mounted) return;
-
-      showMessage('Gagal menghubungi server: $e');
+      showMessage('Tidak dapat terhubung ke peladen saat ini.');
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -198,7 +201,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
     }
   }
 
-  // INPUT DECORATION
   InputDecoration inputDecoration(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
@@ -213,12 +215,11 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
+        borderSide: const BorderSide(color: Color(0xff087F72), width: 1.5),
       ),
     );
   }
 
-  // INPUT
   Widget input({
     required TextEditingController controller,
     required String hint,
@@ -235,14 +236,13 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
     );
   }
 
-  // PASSWORD INPUT
   Widget passwordInput() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
         controller: passwordController,
         obscureText: obscurePassword,
-        decoration: inputDecoration("Password", Icons.lock_outline).copyWith(
+        decoration: inputDecoration("Kata Sandi", Icons.lock_outline).copyWith(
           suffixIcon: IconButton(
             onPressed: () {
               setState(() {
@@ -261,7 +261,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
     );
   }
 
-  // REGISTER BUTTON
   Widget registerButton() {
     return Container(
       width: double.infinity,
@@ -273,7 +272,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xff087F72).withOpacity(.20),
+            color: const Color(0xff087F72).withOpacity(.25),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
@@ -327,7 +326,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
       backgroundColor: const Color(0xffF8FCFA),
       body: Stack(
         children: [
-          // BACKGROUND ATAS
           Positioned(
             top: -40,
             right: -50,
@@ -340,8 +338,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
               ),
             ),
           ),
-
-          // BACKGROUND BAWAH
           Positioned(
             bottom: -50,
             left: -40,
@@ -354,7 +350,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
               ),
             ),
           ),
-
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -362,7 +357,6 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // BACK BUTTON
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -383,30 +377,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 30),
-
-                  // // LOGO
-                  // Center(
-                  //   child: Container(
-                  //     padding: const EdgeInsets.all(15),
-                  //     decoration: BoxDecoration(
-                  //       color: Colors.white,
-                  //       shape: BoxShape.circle,
-                  //       boxShadow: [
-                  //         BoxShadow(
-                  //           color: Colors.black.withOpacity(.08),
-                  //           blurRadius: 15,
-                  //         ),
-                  //       ],
-                  //     ),
-                  //     child: Image.asset("assets/logo_ruang.jpeg", height: 70),
-                  //   ),
-                  // ),
-
                   const SizedBox(height: 25),
-
-                  // TITLE
                   const Text(
                     "Daftar Sebagai\nSiswa",
                     style: TextStyle(
@@ -416,9 +387,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                       height: 1.2,
                     ),
                   ),
-
                   const SizedBox(height: 10),
-
                   const Text(
                     "Lengkapi data diri dan pilih sekolahmu",
                     style: TextStyle(
@@ -427,10 +396,7 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                       height: 1.5,
                     ),
                   ),
-
                   const SizedBox(height: 35),
-
-                  // DATA DIRI
                   const Text(
                     "Data Diri",
                     style: TextStyle(
@@ -439,40 +405,34 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                       color: Color(0xff124F4A),
                     ),
                   ),
-
                   const SizedBox(height: 15),
-
                   input(
                     controller: namaController,
                     hint: "Nama Lengkap",
                     icon: Icons.person_outline,
                   ),
-
                   input(
                     controller: nisController,
                     hint: "NIS",
                     icon: Icons.badge_outlined,
                     keyboardType: TextInputType.number,
                   ),
-
                   input(
                     controller: kelasController,
                     hint: "Kelas (contoh: XII IPA 1)",
                     icon: Icons.class_outlined,
                   ),
-
-                  // PILIHAN JENIS KELAMIN
-                  // const Padding(
-                  //   padding: EdgeInsets.only(bottom: 8, top: 4),
-                  //   child: Text(
-                  //     'Jenis Kelamin',
-                  //     style: TextStyle(
-                  //       fontSize: 13,
-                  //       fontWeight: FontWeight.w600,
-                  //       color: Color(0xff124F4A),
-                  //     ),
-                  //   ),
-                  // ),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8, top: 4),
+                    child: Text(
+                      'Jenis Kelamin',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xff124F4A),
+                      ),
+                    ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 15),
                     decoration: BoxDecoration(
@@ -498,21 +458,15 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   input(
                     controller: emailController,
-                    hint: "Email",
+                    hint: "Email Sekolah (.sch.id)",
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                   ),
-
                   passwordInput(),
-
                   const SizedBox(height: 10),
-
-                  // DATA SEKOLAH DENGAN FITUR SEARCH
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -550,17 +504,28 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                         const SizedBox(height: 15),
                         TextField(
                           controller: schoolSearchController,
-                          decoration: inputDecoration('Cari nama sekolah...', Icons.search),
+                          decoration: inputDecoration(
+                            'Cari nama sekolah...',
+                            Icons.search,
+                          ),
                           onChanged: (value) {
-                            if (_debounce?.isActive ?? false) _debounce?.cancel();
-                            _debounce = Timer(const Duration(milliseconds: 500), () {
-                              fetchSchools(query: value);
-                            });
+                            if (_debounce?.isActive ?? false)
+                              _debounce?.cancel();
+                            _debounce = Timer(
+                              const Duration(milliseconds: 500),
+                              () {
+                                fetchSchools(query: value);
+                              },
+                            );
                           },
                         ),
                         const SizedBox(height: 10),
                         if (isSearchingSchool)
-                          const Center(child: CircularProgressIndicator(color: Color(0xff087F72)))
+                          const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xff087F72),
+                            ),
+                          )
                         else if (schoolList.isNotEmpty)
                           Container(
                             height: 150,
@@ -568,48 +533,75 @@ class _RegisterSiswaState extends State<RegisterSiswa> {
                               border: Border.all(color: Colors.grey.shade200),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: ListView.builder(
-                              itemCount: schoolList.length,
-                              itemBuilder: (context, index) {
-                                final school = schoolList[index];
-                                final schoolIdStr = school['id'].toString();
-                                final schoolName = school['nama_sekolah'] ?? school['nama'] ?? 'Sekolah Tanpa Nama';
-                                final isSelected = selectedSchoolId == schoolIdStr;
+                            child: ClipRRect(
+                              // Ditambahkan ClipRRect agar sudutnya tetap rapi
+                              borderRadius: BorderRadius.circular(12),
+                              child: schoolList.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'Sekolah tidak ditemukan',
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: schoolList.length,
+                                      itemBuilder: (context, index) {
+                                        final school = schoolList[index];
+                                        final schoolIdStr = school['id']
+                                            .toString();
+                                        final schoolName =
+                                            school['nama_sekolah'] ??
+                                            school['nama'] ??
+                                            'Sekolah Tanpa Nama';
+                                        final isSelected =
+                                            selectedSchoolId == schoolIdStr;
 
-                                return ListTile(
-                                  title: Text(schoolName, style: const TextStyle(fontSize: 14)),
-                                  // Subtitle ID dihapus agar tidak tampil
-                                  selected: isSelected,
-                                  selectedTileColor: const Color(0xffE9F7F1),
-                                  onTap: () {
-                                    setState(() {
-                                      selectedSchoolId = schoolIdStr;
-                                      selectedSchoolName = schoolName;
-                                      schoolSearchController.text = schoolName;
-                                      schoolList = []; // Sembunyikan list setelah dipilih
-                                    });
-                                  },
-                                );
-                              },
+                                        // Bungkus dengan Material agar efek sentuhan dan latar belakang ListTile berfungsi normal
+                                        return Material(
+                                          color: Colors.white,
+                                          child: ListTile(
+                                            title: Text(
+                                              schoolName,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            selected: isSelected,
+                                            selectedTileColor: const Color(
+                                              0xffE9F7F1,
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                selectedSchoolId = schoolIdStr;
+                                                selectedSchoolName = schoolName;
+                                                schoolSearchController.text =
+                                                    schoolName;
+                                                schoolList = [];
+                                              });
+                                            },
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ),
                         if (selectedSchoolName != null) ...[
                           const SizedBox(height: 8),
                           Text(
                             'Dipilih: $selectedSchoolName',
-                            style: const TextStyle(fontSize: 12, color: Color(0xff087F72), fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xff087F72),
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ]
+                        ],
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 25),
-
                   registerButton(),
-
                   const SizedBox(height: 20),
-
                   Center(
                     child: Text(
                       "Aman bercerita • Nyaman berkembang",

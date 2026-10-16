@@ -53,27 +53,28 @@ class _RegisterGuruState extends State<RegisterGuru> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: success ? const Color(0xff087F72) : Colors.red,
+        backgroundColor: success ? const Color(0xff087F72) : Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(15),
       ),
     );
   }
 
-  // Fungsi untuk mengambil daftar sekolah (opsi search sekolah)
   Future<void> fetchSchools({String query = ''}) async {
     setState(() => isSearchingSchool = true);
     try {
-      // Ubah parameter menjadi 'query' sesuai backend req.query.query
-      final url = Uri.parse('${ApiConfig.baseUrl}/api/auth/search${query.isNotEmpty ? '?query=$query' : '?query=a'}'); 
-      final response = await http.get(url, headers: {
-        'Accept': 'application/json',
-      }).timeout(const Duration(seconds: 30));
+      final url = Uri.parse(
+        '${ApiConfig.baseUrl}/api/auth/search${query.isNotEmpty ? '?query=$query' : '?query=a'}',
+      );
+      final response = await http
+          .get(url, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         List data = [];
 
-        // Backend mengembalikan format { schools: [...] }
         if (decoded is Map && decoded['schools'] is List) {
           data = decoded['schools'];
         } else if (decoded is List) {
@@ -101,19 +102,33 @@ class _RegisterGuruState extends State<RegisterGuru> {
     final email = emailController.text.trim();
     final password = passwordController.text;
 
-    if (nama.isEmpty || nip.isEmpty || email.isEmpty || password.isEmpty || selectedSchoolId == null) {
-      showMessage("Semua data termasuk sekolah wajib diisi");
+    if (nama.isEmpty ||
+        nip.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        selectedSchoolId == null) {
+      showMessage(
+        "Mohon lengkapi semua data dan pilih sekolah tempat bertugas.",
+      );
       return;
     }
 
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
     if (!emailRegex.hasMatch(email)) {
-      showMessage("Format email tidak valid");
+      showMessage("Format alamat email belum valid.");
+      return;
+    }
+
+    if (!email.endsWith('.sch.id')) {
+      showMessage(
+        "Pendaftaran wajib menggunakan email sekolah yang berakhiran .sch.id",
+      );
       return;
     }
 
     if (password.length < 6) {
-      showMessage("Password minimal 6 karakter");
+      showMessage("Kata sandi minimal harus 6 karakter.");
       return;
     }
 
@@ -158,7 +173,8 @@ class _RegisterGuruState extends State<RegisterGuru> {
 
       if (berhasil) {
         showMessage(
-          data['message']?.toString() ?? 'Registrasi berhasil',
+          data['message']?.toString() ??
+              'Pendaftaran guru berhasil! Silakan verifikasi email.',
           success: true,
         );
 
@@ -168,18 +184,12 @@ class _RegisterGuruState extends State<RegisterGuru> {
         );
       } else {
         showMessage(
-          data['message']?.toString() ??
-              'Registrasi gagal (${response.statusCode})',
+          data['message']?.toString() ?? 'Pendaftaran gagal dilakukan.',
         );
       }
     } catch (e) {
       if (!mounted) return;
-
-      if (e is http.ClientException) {
-        showMessage('Tidak dapat terhubung ke server. Periksa backend dan URL API.');
-      } else {
-        showMessage('Terjadi kesalahan: $e');
-      }
+      showMessage('Tidak dapat terhubung ke peladen saat ini.');
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -201,7 +211,7 @@ class _RegisterGuruState extends State<RegisterGuru> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xff087F72), width: 2),
+        borderSide: const BorderSide(color: Color(0xff087F72), width: 1.5),
       ),
     );
   }
@@ -228,7 +238,7 @@ class _RegisterGuruState extends State<RegisterGuru> {
       child: TextField(
         controller: passwordController,
         obscureText: obscurePassword,
-        decoration: inputDecoration('Password', Icons.lock_outline).copyWith(
+        decoration: inputDecoration('Kata Sandi', Icons.lock_outline).copyWith(
           suffixIcon: IconButton(
             onPressed: () {
               setState(() {
@@ -317,7 +327,6 @@ class _RegisterGuruState extends State<RegisterGuru> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // BACK BUTTON
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -338,9 +347,7 @@ class _RegisterGuruState extends State<RegisterGuru> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
               const Text(
                 'Daftar Sebagai\nGuru BK',
                 style: TextStyle(
@@ -350,20 +357,12 @@ class _RegisterGuruState extends State<RegisterGuru> {
                   height: 1.2,
                 ),
               ),
-
               const SizedBox(height: 10),
-
               const Text(
                 'Lengkapi data pribadi dan pilih sekolah tempat Anda bertugas',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
               ),
-
               const SizedBox(height: 35),
-
               const Text(
                 'Data Pribadi',
                 style: TextStyle(
@@ -372,31 +371,24 @@ class _RegisterGuruState extends State<RegisterGuru> {
                   color: Color(0xff124F4A),
                 ),
               ),
-
               const SizedBox(height: 15),
-
               input(
                 controller: namaController,
                 hint: 'Nama Lengkap',
                 icon: Icons.person_outline,
               ),
-
               input(
                 controller: nipController,
                 hint: 'NIP',
                 icon: Icons.badge_outlined,
               ),
-
               input(
                 controller: emailController,
-                hint: 'Email',
+                hint: "Email Sekolah (.sch.id)",
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
-
               passwordInput(),
-
-              // PILIHAN JENIS KELAMIN
               const Padding(
                 padding: EdgeInsets.only(bottom: 8, top: 4),
                 child: Text(
@@ -433,10 +425,7 @@ class _RegisterGuruState extends State<RegisterGuru> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // DATA SEKOLAH DENGAN FITUR SEARCH
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -474,17 +463,27 @@ class _RegisterGuruState extends State<RegisterGuru> {
                     const SizedBox(height: 15),
                     TextField(
                       controller: schoolSearchController,
-                      decoration: inputDecoration('Cari nama sekolah...', Icons.search),
+                      decoration: inputDecoration(
+                        'Cari nama sekolah...',
+                        Icons.search,
+                      ),
                       onChanged: (value) {
                         if (_debounce?.isActive ?? false) _debounce?.cancel();
-                        _debounce = Timer(const Duration(milliseconds: 500), () {
-                          fetchSchools(query: value);
-                        });
+                        _debounce = Timer(
+                          const Duration(milliseconds: 500),
+                          () {
+                            fetchSchools(query: value);
+                          },
+                        );
                       },
                     ),
                     const SizedBox(height: 10),
                     if (isSearchingSchool)
-                      const Center(child: CircularProgressIndicator(color: Color(0xff087F72)))
+                      const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xff087F72),
+                        ),
+                      )
                     else
                       Container(
                         height: 150,
@@ -492,54 +491,73 @@ class _RegisterGuruState extends State<RegisterGuru> {
                           border: Border.all(color: Colors.grey.shade200),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: schoolList.isEmpty
-                            ? const Center(child: Text('Sekolah tidak ditemukan', style: TextStyle(color: Colors.grey)))
-                            : ListView.builder(
-                                itemCount: schoolList.length,
-                                itemBuilder: (context, index) {
-                                  final school = schoolList[index];
-                                  final schoolIdStr = school['id'].toString();
-                                  final schoolName = school['nama_sekolah'] ?? school['nama'] ?? 'Sekolah Tanpa Nama';
-                                  final isSelected = selectedSchoolId == schoolIdStr;
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: schoolList.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'Sekolah tidak ditemukan',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: schoolList.length,
+                                  itemBuilder: (context, index) {
+                                    final school = schoolList[index];
+                                    final schoolIdStr = school['id'].toString();
+                                    final schoolName =
+                                        school['nama_sekolah'] ??
+                                        school['nama'] ??
+                                        'Sekolah Tanpa Nama';
+                                    final isSelected =
+                                        selectedSchoolId == schoolIdStr;
 
-                                  return ListTile(
-                                    title: Text(schoolName, style: const TextStyle(fontSize: 14)),
-                                    selected: isSelected,
-                                    selectedTileColor: const Color(0xffE9F7F1),
-                                    onTap: () {
-                                      setState(() {
-                                        selectedSchoolName = schoolName;
-                                        schoolSearchController.text = schoolName;
-                                      });
-                                    },
-                                  );
-                                },
-                              ),
+                                    return Material(
+                                      color: Colors.white,
+                                      child: ListTile(
+                                        title: Text(
+                                          schoolName,
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                        selected: isSelected,
+                                        selectedTileColor: const Color(
+                                          0xffE9F7F1,
+                                        ),
+                                        onTap: () {
+                                          setState(() {
+                                            selectedSchoolId = schoolIdStr;
+                                            selectedSchoolName = schoolName;
+                                            schoolSearchController.text =
+                                                schoolName;
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
                       ),
                     if (selectedSchoolName != null) ...[
                       const SizedBox(height: 8),
                       Text(
                         'Dipilih: $selectedSchoolName',
-                        style: const TextStyle(fontSize: 12, color: Color(0xff087F72), fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xff087F72),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ]
+                    ],
                   ],
                 ),
               ),
-
               const SizedBox(height: 25),
-
               registerButton(),
-
               const SizedBox(height: 25),
-
               Center(
                 child: Text(
                   'Aman bercerita • Nyaman berkembang',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                 ),
               ),
             ],
@@ -550,7 +568,6 @@ class _RegisterGuruState extends State<RegisterGuru> {
   }
 }
 
-// Helper kecil agar DropdownButton tidak error tipe data di Flutter modern
 class DropdownButtonMenuItem<T> extends DropdownMenuItem<T> {
   const DropdownButtonMenuItem({
     super.key,
